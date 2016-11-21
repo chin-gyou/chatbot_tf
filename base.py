@@ -41,7 +41,7 @@ class base_enc_dec:
     decoded: number of decoded senquences, by default only decode the last sequence
     """
 
-    def __init__(self, data, labels, length, h_size, e_size, batch_size, num_seq, vocab_size, embedding, decoded=1, mode=0):
+    def __init__(self, data, labels, length, h_size, e_size, batch_size, num_seq, vocab_size, embedding, learning_rate, decoded=1, mode=0):
         self.__dict__.update(locals())
         self.W = tf.Variable(self.embedding, name='Embedding_W')
         self.b = tf.Variable(tf.zeros([self.e_size]), dtype=tf.float32, name='Embedding_b')
@@ -121,7 +121,7 @@ class base_enc_dec:
 
     @define_scope
     def optimise(self):
-        optim = tf.train.AdamOptimizer()
+        optim = tf.train.AdamOptimizer(self.learning_rate)
         global_step = tf.Variable(0, name='global_step', trainable=False)
         train_op = optim.minimize(self.cost, global_step=global_step)
         return global_step, train_op

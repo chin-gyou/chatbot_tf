@@ -14,9 +14,9 @@ class em_sp_enc_dec(sphred_enc_dec):
     @init_final
     def __init__(self, data, labels, length, emotions, emotion_size, h_size, e_size, c_size, z_size, batch_size,
                  num_seq, vocab_size,
-                 embedding, decoded=1):
+                 embedding, learning_rate,decoded=1,mode=0):
         sphred_enc_dec.__init__(self, data, labels, length, h_size, e_size, c_size, batch_size, num_seq, vocab_size,
-                                embedding, decoded)
+                                embedding, learning_rate,decoded,mode)
         self.z_size = z_size
         self.emotions = emotions
         self.emotion_size = emotion_size

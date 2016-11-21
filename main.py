@@ -42,7 +42,7 @@ def train(options):
 
     # build model and graph
     model = hred_enc_dec(data, labels, length, int(options.h_size), e_size,int(options.c_size), int(options.batch_size),
-                           int(options.num_seq), vocab_size, word_vecs, int(options.decoded))
+                           int(options.num_seq), vocab_size, word_vecs, float(options.lr),int(options.decoded))
     variable_summaries(model.cost, 'loss')
 
     merged = tf.merge_all_summaries()

@@ -4,10 +4,10 @@ from base import *
 # hierarchical seq2seq model
 class hred_enc_dec(base_enc_dec):
     @init_final
-    def __init__(self, data, labels, length, h_size, e_size, c_size, batch_size, num_seq, vocab_size, embedding,
-                 decoded=1):
-        base_enc_dec.__init__(self, data, labels, length, h_size, e_size, batch_size, num_seq, vocab_size, embedding,
-                              decoded)
+    def __init__(self, data, labels, length, h_size, e_size, c_size, batch_size, num_seq, vocab_size, embedding,learning_rate,
+                 decoded=1,mode=0):
+        base_enc_dec.__init__(self, data, labels, length, h_size, e_size, batch_size, num_seq, vocab_size, embedding,learning_rate,
+                              decoded,mode)
         self.c_size = c_size
         with tf.variable_scope('hierarchical'):
             self.hred = rnn_cell.GRUCell(self.c_size)
