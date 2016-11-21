@@ -117,8 +117,8 @@ class base_enc_dec:
     def cost(self):
         y_flat = tf.reshape(self.labels[-self.decoded:], [-1])
         if self.mode:
-	    self.prediction = tf.stop_gradient(self.prediction, 'stop_gradients')
-	losses = tf.nn.sparse_softmax_cross_entropy_with_logits(self.prediction, y_flat)
+            self.prediction = tf.stop_gradient(self.prediction, 'stop_gradients')
+        losses = tf.nn.sparse_softmax_cross_entropy_with_logits(self.prediction, y_flat)
         return self.mean_cross_entropy(y_flat, losses)
 
     @define_scope
