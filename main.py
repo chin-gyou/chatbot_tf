@@ -42,11 +42,10 @@ def train(options):
 
     # build model and graph
     model = hred_enc_dec(data, labels, length, int(options.h_size), e_size,int(options.c_size), int(options.batch_size),
-                           int(options.num_seq), vocab_size, word_vecs, float(options.lr),int(options.decoded))
+                           int(options.num_seq), vocab_size, word_vecs, int(options.decoded), int(options.mode))
     variable_summaries(model.cost, 'loss')
 
     merged = tf.merge_all_summaries()
-    saver = tf.train.Saver()
     
     config = tf.ConfigProto(allow_soft_placement = False)
     sess = tf.Session(config=config)
@@ -57,16 +56,29 @@ def train(options):
     sum_writer = tf.train.SummaryWriter(options.tboard_dir, graph=sess.graph)
 
     # restore from a check point
-    if options.load_chkpt:
+    if options.load_chkpt and options.mode == 1:
         print('Loading saved variables from checkpoint file to graph')
-        saver.restore(sess, options.load_chkpt)
+        variables_to_restore = {}
+        for v in tf.all_variables():
+	    if v in tf.trainable_variables():
+	    	restore_name = v.op.name
+		variables_to_restore[restore_name] = v
+	saver = tf.train.Saver(variables_to_restore)
+	sess.run(init_op)
+	saver.restore(sess, options.load_chkpt)
+    	print('Start Testing...')
+    elif options.load_chkpt and options.mode == 0:
+        saver = tf.train.Saver()
+	saver.restore(sess, options.load_chkpt)
         print('Resume Training...')
     else:
         sess.run(init_op)
         print('Start Training...')
     try:
-        saver.save(sess, options.save_path + 'checkpoint_start')
-        while not coord.should_stop():
+   	saver = tf.train.Saver()
+   	saver.save(sess, options.save_path + 'checkpoint_start')
+        total_loss = 0.0
+	while not coord.should_stop():
             batch_loss, training, summary = sess.run([model.cost, model.optimise, merged])
             #batch_loss=loss[0]
             #prediction=np.argmax(loss[1],1)
@@ -74,17 +86,20 @@ def train(options):
             if train_step % 100 == 0:
                 sum_writer.add_summary(summary, train_step)
                 print('[size:%d]Mini-Batches run : %d\t\tLoss : %f' % (int(options.batch_size), train_step, batch_loss))
-                #print(prediction)
+                print('Total batches run-to-now avergae loss: %f') % ((total_loss+batch_loss)/train_step)
+		#print(prediction)
                 #print(loss[2])
-            if train_step % int(options.save_freq) == 0:
+            if train_step % int(options.save_freq) == 0 and options.mode == 0:
                 saver.save(sess, options.save_path + 'checkpoint_' + str(train_step))
                 print('@iter:%d \t Model saved at: %s' % (train_step, options.save_path))
+	    total_loss += batch_loss
     except tf.errors.OutOfRangeError:
         print('Training Complete...')
     finally:
-        print('Saving final checkpoint...Model saved at :', options.save_path)
-        saver.save(sess, options.save_path + 'checkpoint_end')
-        print('Halting Queues and Threads')
+        if options.mode == 0:
+	    print('Saving final checkpoint...Model saved at :', options.save_path)
+            saver.save(sess, options.save_path + 'checkpoint_end')
+	print('Halting Queues and Threads')
         coord.request_stop()
         coord.join(threads)
         sess.close()
@@ -92,9 +107,9 @@ def train(options):
 if __name__ == '__main__':
     parser = OptionParser()
     parser.add_option("-i", "--input-path", dest="input_path", help="Path to data text files in TFRecord format",
-                      default='./tfrecord')
+                      default='./test_record')
     parser.add_option("--wordvec-dict", dest="wvec_dict", help="Path to save word-index dictionary",
-                      default='../WordVecFiles/wordToInd.dict')
+                      default='./wordToInd.dict')
     parser.add_option("--wordvec-mat", dest="wvec_mat", help="Path to save index-wordvector numpy matrix ",
                       default='./embedding.mat')
     parser.add_option("-b", "--batch-size", dest="batch_size", help="Size of mini batch", default=1)
@@ -109,8 +124,8 @@ if __name__ == '__main__':
     parser.add_option("--hsize", dest="h_size", help="Size of hidden layer in word level", default=500)
     parser.add_option("--csize", dest="c_size", help="Size of hidden layer in sequence-level", default=1000)
     parser.add_option("--decoded", dest="decoded", help="Number of decoded sequences per dialogue", default=1)
-    parser.add_option("--run-mode", dest="mode", help="0 for train, 1 for test", default=0)
+    parser.add_option("--run-mode", dest="mode", help="0 for train, 1 for test", default=1)
     parser.add_option("--load-chkpt", dest="load_chkpt", help="Path to checkpoint file. Required for mode:1",
-                      default='')
+                      default='./Checkpoints/checkpoint_end')
     (options, _) = parser.parse_args()
     train(options)
