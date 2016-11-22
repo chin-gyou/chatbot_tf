@@ -98,16 +98,17 @@ class base_enc_dec:
         mean_loss = tf.reduce_mean(mean_loss_by_example)
         return mean_loss
 
-    def mean_cross_entropy(self, y_flat, losses):
+    # compute the mean cross entropy for the last but i sequence
+    def mean_cross_entropy(self, y_flat, losses, i):
         # Mask the losses
         mask = tf.sign(tf.to_float(y_flat))
         masked_losses = mask * losses
-        # Bring back to [decoded, batch, max_length] shape
-        masked_losses = tf.reshape(masked_losses, tf.shape(self.labels[-self.decoded:]))
+        # Bring back to [batch, max_length] shape
+        masked_losses = tf.reshape(masked_losses, tf.shape(self.labels[-i]))
 
         # Calculate mean loss
-        mean_loss_by_example = tf.reduce_sum(masked_losses, reduction_indices=2) / tf.to_float(
-            self.length[-self.decoded:])
+        mean_loss_by_example = tf.reduce_sum(masked_losses, reduction_indices=1) / tf.to_float(
+            self.length[-i])
         mean_loss = tf.reduce_mean(mean_loss_by_example)
         return mean_loss
 
@@ -115,11 +116,15 @@ class base_enc_dec:
     # returned loss is the mean loss for every decoded sequence
     @define_scope
     def cost(self):
-        y_flat = tf.reshape(self.labels[-self.decoded:], [-1])
+        # in test mode, do not backpropagate
         if self.mode:
             self.prediction = tf.stop_gradient(self.prediction, 'stop_gradients')
-        losses = tf.nn.sparse_softmax_cross_entropy_with_logits(self.prediction, y_flat)
-        return self.mean_cross_entropy(y_flat, losses)
+        total_loss = 0
+        for i in range(1, self.decoded + 1):
+            y_flat = tf.reshape(self.labels[-i], [-1])
+            losses = tf.nn.sparse_softmax_cross_entropy_with_logits(self.prediction[-i], y_flat)
+            total_loss += self.mean_cross_entropy(y_flat, losses, i)
+        return total_loss / self.decoded
 
     @define_scope
     def optimise(self):

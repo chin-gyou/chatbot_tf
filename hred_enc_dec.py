@@ -45,10 +45,15 @@ class hred_enc_dec(base_enc_dec):
 
     # decode specified {decoded} senquences
     # h and e are sequence-level and word-level hidden states
+    # return a list in which each item is of size batch_size*max_length*vocab_size
     def decode(self, h, e):
         # decoded array keeps the output for all decoded sequences
         decoded = []
         with tf.variable_scope('decode') as dec:
+            # mapping to vocab probability
+            W2 = tf.Variable(tf.zeros([self.decodernet.output_size, self.vocab_size]), dtype=tf.float32,
+                             name='Output_W')
+            b2 = tf.Variable(tf.zeros([self.vocab_size]), dtype=tf.float32, name='Output_b')
             # decode, starts from the context state before the first decoded sequence
             for i in range(self.num_seq - self.decoded - 1, self.num_seq - 1):
                 max_len = tf.shape(self.data[i + 1])[1]
@@ -56,13 +61,10 @@ class hred_enc_dec(base_enc_dec):
                                                                            self._context_input(h, i, max_len)]),
                                             sequence_length=self.length[i + 1], dtype=tf.float32)
                 dec.reuse_variables()
-                decoded.append(output)
-            W2 = tf.Variable(tf.zeros([self.decodernet.output_size, self.vocab_size]), dtype=tf.float32,
-                             name='Output_W')
-            b2 = tf.Variable(tf.zeros([self.vocab_size]), dtype=tf.float32, name='Output_b')
+                # output: batch_size*max_length*h_size
+                decoded.append(tf.matmul(tf.reshape(output, [-1, self.decodernet.output_size]), W2) + b2)
 
-            logits_flat = tf.matmul(tf.reshape(decoded, [-1, self.decodernet.output_size]), W2) + b2
-            return logits_flat
+            return decoded
 
     @define_scope
     def prediction(self):
