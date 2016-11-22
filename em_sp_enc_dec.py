@@ -103,6 +103,10 @@ class em_sp_enc_dec(sphred_enc_dec):
         # decoded array keeps the output for all decoded sequences
         decoded, kldiv, pred_errors = [], [], []
         with tf.variable_scope('decode') as dec:
+            # mapping to vocab probability
+            W2 = tf.Variable(tf.zeros([self.decodernet.output_size, self.vocab_size]), dtype=tf.float32,
+                             name='Output_W')
+            b2 = tf.Variable(tf.zeros([self.vocab_size]), dtype=tf.float32, name='Output_b')
             # decode, starts from the context state before the first decoded sequence
             for i in range(self.num_seq - self.decoded - 1, self.num_seq - 1):
                 max_len = tf.shape(self.data[i + 1])[1]
@@ -111,15 +115,10 @@ class em_sp_enc_dec(sphred_enc_dec):
                                             tf.concat(2, [self._sentence_input(i, max_len), context_input]),
                                             sequence_length=self.length[i + 1], dtype=tf.float32)
                 dec.reuse_variables()
-                decoded.append(output)
+                decoded.append(tf.matmul(tf.reshape(output, [-1, self.decodernet.output_size]), W2) + b2)
                 kldiv.append(kldivergence)
                 pred_errors.append(pred_error)
-            W2 = tf.Variable(tf.zeros([self.decodernet.output_size, self.vocab_size]), dtype=tf.float32,
-                             name='Output_W')
-            b2 = tf.Variable(tf.zeros([self.vocab_size]), dtype=tf.float32, name='Output_b')
-
-            logits_flat = tf.matmul(tf.reshape(decoded, [-1, self.decodernet.output_size]), W2) + b2
-            return logits_flat, kldiv, pred_errors
+            return decoded, kldiv, pred_errors
 
     @define_scope
     def prediction(self):
@@ -132,10 +131,15 @@ class em_sp_enc_dec(sphred_enc_dec):
     # returned loss is the mean loss for every decoded sequence
     @define_scope
     def cost(self):
-        y_flat = tf.reshape(self.labels[-self.decoded:], [-1])
+        # in test mode, do not backpropagate
+        if self.mode:
+            self.prediction = tf.stop_gradient(self.prediction, 'stop_gradients')
+        total_loss = 0
         output, kldiv, pred_error = self.prediction
-        losses = tf.nn.sparse_softmax_cross_entropy_with_logits(output, y_flat)
-        mean_cross_entropy = self.mean_cross_entropy(y_flat, losses)
+        for i in range(1, self.decoded + 1):
+            y_flat = tf.reshape(self.labels[-i], [-1])
+            losses = tf.nn.sparse_softmax_cross_entropy_with_logits(output[-i], y_flat)
+            total_loss += self.mean_cross_entropy(y_flat, losses, i)
         kldiv_loss = tf.reduce_mean(kldiv)
         pred_error = tf.reduce_mean(pred_error)
-        return mean_cross_entropy + kldiv_loss + pred_error
+        return total_loss / self.decoded + kldiv_loss + pred_error
