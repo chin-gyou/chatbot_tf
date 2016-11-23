@@ -1,10 +1,12 @@
 import tensorflow as tf
-import numpy as np
+import random
 import pickle
+import numpy as np
 
 """
     data: sequence data, num_sentences*batch_size*max_length*vocab_size
     labels: vocab index labels, num_sentences*batch_size*max_length, padding labels are 0s
+    emotions: emotion information, num_sequence*batch_size
     length: length of every sequence, num_sequence*batch_size
     word_vecs: vocab_size*vocab_size identity matrix, to map index to a one-hot vector
 """
@@ -17,38 +19,48 @@ class data_producer:
         self.reader = tf.TFRecordReader()
 
     # label: vocabulary index list, num_sequence*len
+    # emotion: emotion information list, num_sequence
     # convert one-line dialogue into a tf.SequenceExample
     # featurelist[0] is for length
     # featurelist[1:num_sequence] is for sequences
-    def __make_example(self, label):
+    def __make_example(self, label, emotion=None):
         ex = tf.train.SequenceExample()
         # one sequence
         for i, l in enumerate(label):
             ex.feature_lists.feature_list['0'].feature.add().int64_list.value.append(len(l))
+            if emotion is not None:
+                ex.feature_lists.feature_list['emotion'].feature.add().int64_list.value.append(int(emotion[i]))
             for w in l:
                 ex.feature_lists.feature_list[str(i + 1)].feature.add().int64_list.value.append(w)
         return ex
 
     # labels: list of label(num_sentences*length), save as tfrecord form
-    def save_record(self, labels, fout):
+    # emotions: list of emotion(num_sequence), save as tfrecord form
+    def save_record(self, labels, fout, emotions=None):
         writer = tf.python_io.TFRecordWriter(fout)
         for i, dialogue in enumerate(labels):
             if i % 100 == 0:
                 print(i)
-            ex = self.__make_example(dialogue)
+            if emotions is not None:
+                ex = self.__make_example(dialogue, emotions[i])
+            else:
+                ex = self.__make_example(dialogue)
             writer.write(ex.SerializeToString())
         writer.close()
         print('close')
 
     # read from a list of TF_Record files frs, return a parsed Sequence_example
     # Every Sequence_example contains one dialogue
-    def __read_record(self, frs):
+    # emotion=0 indicates no emotion information stored
+    def __read_record(self, emotion=0):
         # first construct a queue containing a list of filenames.
         # All data can be split up in multiple files to keep size down
         # serialized_example is a Tensor of type string.
         _, serialized_example = self.reader.read(self.file_queue)
         # create mapping to parse a sequence_example
-        mapping = {'0': tf.FixedLenFeature([self.num_sequence], tf.int64)}
+        mapping = {'0': tf.FixedLenSequenceFeature([], dtype=tf.int64)}
+        if emotion:
+            mapping['emotion'] = tf.FixedLenSequenceFeature([], dtype=tf.int64)
         for i in range(self.num_sequence + 1):
             mapping[str(i)] = tf.FixedLenSequenceFeature([], dtype=tf.int64)
         # sequences is a sequence_example for one dialogue
@@ -58,10 +70,13 @@ class data_producer:
         return sequences
 
     # get the next batch from a list of files frs
-    def batch_data(self, batch_size):
-        sequences = self.__read_record(self.frs)  # one-line dialogue
+    # emotion=0 indicates no emotion information stored
+    def batch_data(self, batch_size, emotion=0):
+        sequences = self.__read_record(emotion)  # one-line dialogue
+
         batched_data = tf.train.batch(
-            tensors=[sequences[str(i)] for i in range(self.num_sequence + 1)],
+            tensors=[sequences[str(i)] for i in range(self.num_sequence + 1)] + [sequences['emotion']] if emotion else [
+                sequences[str(i)] for i in range(self.num_sequence + 1)],
             batch_size=batch_size,
             dynamic_pad=True
         )
@@ -71,8 +86,14 @@ class data_producer:
         for i in range(1, self.num_sequence + 1):
             vecs.append(tf.one_hot(batched_data[i], depth=self.vocab_size, dtype=tf.float32))
         print(vecs)
-        # return length(num_sequence*batch_size), labels(num_sequence*batch_size*max_len), data(num_sequences*batch_size*max_len*embedding_size)
-        return tf.transpose(batched_data[0], perm=[1, 0]), batched_data[1:self.num_sequence + 1], vecs
+        if emotion:
+            # return additional emotion(num_sequence*batch_size)
+            return tf.transpose(batched_data[0], perm=[1, 0]), batched_data[
+                                                               1:self.num_sequence + 1], vecs, tf.transpose(
+                batched_data[self.num_sequence + 1], perm=[1, 0])
+        else:
+            # return length(num_sequence*batch_size), labels(num_sequence*batch_size*max_len), data(num_sequences*batch_size*max_len*embedding_size)
+            return tf.transpose(batched_data[0], perm=[1, 0]), batched_data[1:self.num_sequence + 1], vecs
 
     # divide dialogues into several turns
     # dialogue is a list with every element is a word_index
@@ -114,8 +135,12 @@ if __name__ == '__main__':
     #    length, labels, data = sess.run(producer.batch_data(1))
     #    print(labels)
     # coord.join(threads)
-    with open('data.pkl', 'rb') as f:
+    with open('test_data.pkl', 'rb') as f:
         labels = pickle.load(f)
+        random.shuffle(labels)
         print(len(labels))
+        sequence = np.random.choice([0, 1], size=(3,), p=[1. / 3, 2. / 3])
+        emotions = [sequence for l in labels]
+        print(len(emotions))
         # print(labels[-30:])
-        producer.save_record(labels[1100000:1110000], './tfrecord2/input.tfrecord30')
+        producer.save_record(labels, './input.tfrecord.test', emotions)

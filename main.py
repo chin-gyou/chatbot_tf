@@ -1,5 +1,5 @@
 from optparse import OptionParser
-from sphred_enc_dec import *
+from em_sp_enc_dec import *
 from dataproducer import *
 import os
 import pickle
@@ -38,11 +38,15 @@ def train(options):
     vocab_size, e_size = word_vecs.shape
     fileList = [os.path.join(options.input_path, item) for item in fileList]
     dataproducer=data_producer(fileList,vocab_size,int(options.num_seq),int(options.num_epochs))
-    length,labels,data=dataproducer.batch_data(int(options.batch_size))
-
+    # length,labels,data=dataproducer.batch_data(int(options.batch_size))
+    length, labels, data, emotions = dataproducer.batch_data(int(options.batch_size), 1)
     # build model and graph
-    model = hred_enc_dec(data, labels, length, int(options.h_size), e_size,int(options.c_size), int(options.batch_size),
-                           int(options.num_seq), vocab_size, word_vecs, float(options.lr),int(options.decoded))
+    # model = hred_enc_dec(data, labels, length, int(options.h_size), e_size,int(options.c_size), int(options.batch_size),
+    #                        int(options.num_seq), vocab_size, word_vecs, float(options.lr),int(options.decoded),int(options.mode))
+    model = em_sp_enc_dec(data, labels, length, emotions, 2, int(options.h_size), e_size, int(options.c_size),
+                          int(options.z_size), int(options.batch_size),
+                          int(options.num_seq), vocab_size, word_vecs, float(options.lr), int(options.decoded),
+                          int(options.mode))
     variable_summaries(model.cost, 'loss')
 
     merged = tf.merge_all_summaries()
@@ -108,6 +112,7 @@ if __name__ == '__main__':
     parser.add_option("--num-seq", dest="num_seq", help="Number of sequences per dialogue", default=3)
     parser.add_option("--hsize", dest="h_size", help="Size of hidden layer in word level", default=500)
     parser.add_option("--csize", dest="c_size", help="Size of hidden layer in sequence-level", default=1000)
+    parser.add_option("--zsize", dest="z_size", help="Size of latent variable", default=500)
     parser.add_option("--decoded", dest="decoded", help="Number of decoded sequences per dialogue", default=1)
     parser.add_option("--run-mode", dest="mode", help="0 for train, 1 for test", default=0)
     parser.add_option("--load-chkpt", dest="load_chkpt", help="Path to checkpoint file. Required for mode:1",

@@ -15,25 +15,25 @@ class em_sp_enc_dec(sphred_enc_dec):
     def __init__(self, data, labels, length, emotions, emotion_size, h_size, e_size, c_size, z_size, batch_size,
                  num_seq, vocab_size,
                  embedding, learning_rate,decoded=1,mode=0):
-        sphred_enc_dec.__init__(self, data, labels, length, h_size, e_size, c_size, batch_size, num_seq, vocab_size,
-                                embedding, learning_rate,decoded,mode)
         self.z_size = z_size
         self.emotions = emotions
         self.emotion_size = emotion_size
 
         # map emotion to embedding parameters, embedding is of the same size as c_size
-        self.emo = Dense("emotion_to_embedding", self.c_size)
+        self.emo = Dense("emotion_to_embedding", c_size)
 
         # embedding to predict y label parameters
-        self.predict_emo = Dense('predict emotion', self.emotion_size)
+        self.predict_emo = Dense('predict_emotion', emotion_size)
 
         # prior distribution parameters
-        self.pri_u = Dense("prior_u", self.z_size)
-        self.pri_ls = Dense("prior_logsigma", self.z_size)
+        self.pri_u = Dense("prior_u", z_size)
+        self.pri_ls = Dense("prior_logsigma", z_size)
 
         # posterior distritbution parameters
-        self.pos_u = Dense("posterior_u", self.z_size)
-        self.pos_ls = Dense("posterior_logsigma", self.z_size)
+        self.pos_u = Dense("posterior_u", z_size)
+        self.pos_ls = Dense("posterior_logsigma", z_size)
+        sphred_enc_dec.__init__(self, data, labels, length, h_size, e_size, c_size, batch_size, num_seq, vocab_size,
+                                embedding, learning_rate,decoded,mode)
 
     # input of context for decoding sequences
     # return context_input(batch_size*max_len*3*c_size), kldivergence between prior and posterior, cross entropy of posterior prediction
@@ -48,7 +48,7 @@ class em_sp_enc_dec(sphred_enc_dec):
         pos_mu, pos_log_sigma = self.compute_dist(context_pos, self.emotions[i+1])
         context = tf.concat(concat_dim=1, values=[context_pri, z])
         # probability of label
-        prob = self.predict_emo(context_pri)
+        prob = self.predict_emo(context_pri, self.c_size * 2)
         pred_error = tf.nn.sparse_softmax_cross_entropy_with_logits(prob, self.emotions[i + 1])
         # replicate context max_len times
         context_input = tf.tile(context, [max_len, 1])
@@ -65,14 +65,14 @@ class em_sp_enc_dec(sphred_enc_dec):
     def compute_dist(self, contexts, emotion, option="prior"):
         # transfer scalar emotion to one-hot vector then mapping to c_size-vector
         emo_input = tf.one_hot(emotion, depth=self.emotion_size, dtype=tf.float32)
-        emotion_embed = self.emo(emo_input)
+        emotion_embed = self.emo(emo_input, self.emotion_size)
         # input to generate distribution. batch_size*3*c_size
         dist_input = tf.concat(concat_dim=1, values=[contexts, emotion_embed])
         # genetate distribution
         if option == 'prior':
-            return self.pri_u(dist_input), self.pri_ls(dist_input)
+            return self.pri_u(dist_input, self.c_size * 3), self.pri_ls(dist_input, self.c_size * 3)
         if option == 'posterior':
-            return self.pos_u(dist_input), self.pos_ls(dist_input)
+            return self.pos_u(dist_input, self.c_size * 3), self.pos_ls(dist_input, self.c_size * 3)
 
     # context: batch_size*context_size
     # emotion: batch_size*emotion_size
