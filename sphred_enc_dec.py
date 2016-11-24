@@ -43,6 +43,7 @@ class sphred_enc_dec(hred_enc_dec):
         h_state = [tf.zeros([self.batch_size, self.c_size])] * (self.num_seq - self.decoded - 1)
         # encode in sentence-level
         with tf.variable_scope('hierarchical') as hier:
+            print 'hier', hier.name
             initial_stateA, initial_stateB = tf.zeros([self.batch_size, self.c_size]), tf.zeros(
                 [self.batch_size, self.c_size])
             # run sequence-level rnn until decoding is needed, these states don't need to be stored
@@ -89,6 +90,22 @@ class sphred_enc_dec(hred_enc_dec):
 
             logits_flat = tf.matmul(tf.reshape(output, [-1, response.output_size]), W) + b
             return logits_flat
+
+    def decode_forward(self,h, sentence_input, initial):
+        i = self.num_seq - 2
+
+        with tf.variable_scope('decode') as dec:
+            context = tf.concat(concat_dim=1, values=[h[i], h[i + 1]]) # h_size*2*c_size
+            context_input = tf.reshape(context, [tf.shape(context)[0], 1, 2 * self.c_size])
+            sentence_input = tf.reshape(sentence_input, [-1,self.vocab_size])  # data[i] batch_size*max_length*feature_size
+            embedded = tf.matmul(sentence_input,self.W) + self.b
+            output, dec_state = rnn.dynamic_rnn(self.decodernet, tf.concat(2, [tf.reshape(embedded,[1,1,300]), context_input]),
+                                       sequence_length=[1], dtype=tf.float32, initial_state=initial)
+            W = tf.Variable(tf.zeros([self.decodernet.output_size, self.vocab_size]), dtype=tf.float32,
+                             name='Output_W')
+            b = tf.Variable(tf.zeros([self.vocab_size]), dtype=tf.float32, name='Output_b')
+            word_ind = tf.argmax(tf.nn.softmax(tf.matmul(tf.reshape(output,[-1,self.decodernet.output_size]),W) + b),1)
+            return word_ind, dec_state
 
 
 if __name__ == '__main__':
