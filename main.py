@@ -1,6 +1,7 @@
 from optparse import OptionParser
 from em_sp_enc_dec import *
 from dataproducer import *
+from util import *
 import os
 import pickle
 import time
@@ -18,9 +19,10 @@ def variable_summaries(var, name):
     tf.scalar_summary('min/' + name, tf.reduce_min(var))
     tf.histogram_summary(name, var)
 
-def train(options):
+
+def build_graph(options):
     # get input file list and word vectors
-    word_vecs,word_dict=0,0
+    word_vecs, word_dict = 0, 0
     fileList = os.listdir(options.input_path)
     if fileList == []:
         print(
@@ -37,7 +39,7 @@ def train(options):
     # get input data
     vocab_size, e_size = word_vecs.shape
     fileList = [os.path.join(options.input_path, item) for item in fileList]
-    dataproducer=data_producer(fileList,vocab_size,int(options.num_seq),int(options.num_epochs))
+    dataproducer = data_producer(fileList, vocab_size, int(options.num_seq), int(options.num_epochs))
     # length,labels,data=dataproducer.batch_data(int(options.batch_size))
     length, labels, data, emotions = dataproducer.batch_data(int(options.batch_size), 1)
     # build model and graph
@@ -47,6 +49,11 @@ def train(options):
                           int(options.z_size), int(options.batch_size),
                           int(options.num_seq), vocab_size, word_vecs, float(options.lr), int(options.decoded),
                           int(options.mode))
+    return model
+
+
+def train(options):
+    model = build_graph(options)
     variable_summaries(model.cost, 'loss')
 
     merged = tf.merge_all_summaries()
@@ -72,14 +79,10 @@ def train(options):
         saver.save(sess, options.save_path + 'checkpoint_start')
         while not coord.should_stop():
             batch_loss, training, summary = sess.run([model.cost, model.optimise, merged])
-            #batch_loss=loss[0]
-            #prediction=np.argmax(loss[1],1)
             train_step=training[0]
             if train_step % 100 == 0:
                 sum_writer.add_summary(summary, train_step)
                 print('[size:%d]Mini-Batches run : %d\t\tLoss : %f' % (int(options.batch_size), train_step, batch_loss))
-                #print(prediction)
-                #print(loss[2])
             if train_step % int(options.save_freq) == 0:
                 saver.save(sess, options.save_path + 'checkpoint_' + str(train_step))
                 print('@iter:%d \t Model saved at: %s' % (train_step, options.save_path))
@@ -88,6 +91,35 @@ def train(options):
     finally:
         print('Saving final checkpoint...Model saved at :', options.save_path)
         saver.save(sess, options.save_path + 'checkpoint_end')
+        print('Halting Queues and Threads')
+        coord.request_stop()
+        coord.join(threads)
+        sess.close()
+
+
+def test(options):
+    model = build_graph(options)
+    variable_summaries(model.cost, 'loss')
+
+    merged = tf.merge_all_summaries()
+    config = tf.ConfigProto(allow_soft_placement=False)
+    sess = tf.Session(config=config)
+    coord = tf.train.Coordinator()
+    init_op = tf.group(tf.initialize_all_variables(), tf.initialize_local_variables())
+    threads = tf.train.start_queue_runners(coord=coord, sess=sess)
+    time.sleep(1)
+
+    try:
+        restore_trainable(sess, options.load_chkpt)
+        step = 0
+        while not coord.should_stop():
+            batch_loss, summary = sess.run([model.cost, merged])
+            step += 1
+            if step % 100 == 0:
+                print('[size:%d]Mini-Batches run : %d\t\tLoss : %f' % (int(options.batch_size), step, batch_loss))
+    except tf.errors.OutOfRangeError:
+        print('Training Complete...')
+    finally:
         print('Halting Queues and Threads')
         coord.request_stop()
         coord.join(threads)
@@ -118,4 +150,7 @@ if __name__ == '__main__':
     parser.add_option("--load-chkpt", dest="load_chkpt", help="Path to checkpoint file. Required for mode:1",
                       default='')
     (options, _) = parser.parse_args()
-    train(options)
+    if options.mode == '0':
+        train(options)
+    else:
+        test(options)
