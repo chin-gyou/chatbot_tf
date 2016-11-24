@@ -42,6 +42,10 @@ def build_graph(options):
     dataproducer = data_producer(fileList, vocab_size, int(options.num_seq), int(options.num_epochs))
     # length,labels,data=dataproducer.batch_data(int(options.batch_size))
     length, labels, data, emotions = dataproducer.batch_data(int(options.batch_size), 1)
+    # prepare for test
+    if int(options.mode) == 2:
+        chat_test.main_chat_test(options, vocab_size, e_size, word_vecs)
+        sys.exit(0)
     # build model and graph
     # model = hred_enc_dec(data, labels, length, int(options.h_size), e_size,int(options.c_size), int(options.batch_size),
     #                        int(options.num_seq), vocab_size, word_vecs, float(options.lr),int(options.decoded),int(options.mode))
@@ -146,7 +150,7 @@ if __name__ == '__main__':
     parser.add_option("--csize", dest="c_size", help="Size of hidden layer in sequence-level", default=1000)
     parser.add_option("--zsize", dest="z_size", help="Size of latent variable", default=500)
     parser.add_option("--decoded", dest="decoded", help="Number of decoded sequences per dialogue", default=1)
-    parser.add_option("--run-mode", dest="mode", help="0 for train, 1 for test", default=0)
+    parser.add_option("--run-mode", dest="mode", help="0 for train, 1 for test, 2 for test decode word", default=0)
     parser.add_option("--load-chkpt", dest="load_chkpt", help="Path to checkpoint file. Required for mode:1",
                       default='')
     (options, _) = parser.parse_args()
