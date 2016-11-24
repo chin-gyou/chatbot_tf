@@ -22,7 +22,11 @@ def init_final(function):
     @functools.wraps(function)
     def decorator(self, *args, **kwargs):
         function(self, *args, **kwargs)
-        self.optimise
+        # In test mode, only build graph by prediction, no optimise part
+        if self.mode:
+            self.prediction
+        else:  # train mode, optimise
+            self.optimise
 
     return decorator
 
@@ -114,9 +118,6 @@ class base_enc_dec:
     # returned loss is the mean loss for every decoded sequence
     @define_scope
     def cost(self):
-        # in test mode, do not backpropagate
-        if self.mode:
-            self.prediction = tf.stop_gradient(self.prediction, 'stop_gradients')
         total_loss = 0
         for i in range(1, self.decoded + 1):
             y_flat = tf.reshape(self.labels[-i], [-1])

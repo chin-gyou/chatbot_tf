@@ -131,9 +131,6 @@ class em_sp_enc_dec(sphred_enc_dec):
     # returned loss is the mean loss for every decoded sequence
     @define_scope
     def cost(self):
-        # in test mode, do not backpropagate
-        if self.mode:
-            self.prediction = tf.stop_gradient(self.prediction, 'stop_gradients')
         total_loss = 0
         output, kldiv, pred_error = self.prediction
         for i in range(1, self.decoded + 1):
