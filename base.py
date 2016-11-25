@@ -23,9 +23,9 @@ def init_final(function):
     def decorator(self, *args, **kwargs):
         function(self, *args, **kwargs)
         # In test mode, only build graph by prediction, no optimise part
-        if self.mode:
+        if self.mode == 1:
             self.prediction
-        else:  # train mode, optimise
+        elif self.mode ==0: # train mode, optimise
             self.optimise
 
     return decorator
@@ -127,6 +127,8 @@ class base_enc_dec:
 
     @define_scope
     def optimise(self):
+        if int(self.mode) == 2:
+            return
         optim = tf.train.AdamOptimizer(self.learning_rate)
         global_step = tf.Variable(0, name='global_step', trainable=False)
         train_op = optim.minimize(self.cost, global_step=global_step)
