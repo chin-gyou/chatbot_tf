@@ -5,7 +5,7 @@ from util import *
 import os
 import pickle
 import time
-
+import chat_test
 # add variables to summary
 def variable_summaries(var, name):
     """Attach a lot of summaries to a Tensor."""
