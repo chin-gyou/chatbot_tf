@@ -48,23 +48,37 @@ class hred_enc_dec(base_enc_dec):
     # return a list in which each item is of size batch_size*max_length*vocab_size
     def decode(self, h, e):
         # decoded array keeps the output for all decoded sequences
-        decoded = []
+        decoded, decoded_sequence = [], []
         with tf.variable_scope('decode') as dec:
-            # mapping to vocab probability
-            W2 = tf.Variable(tf.zeros([self.decodernet.output_size, self.vocab_size]), dtype=tf.float32,
-                             name='Output_W')
-            b2 = tf.Variable(tf.zeros([self.vocab_size]), dtype=tf.float32, name='Output_b')
             # decode, starts from the context state before the first decoded sequence
             for i in range(self.num_seq - self.decoded - 1, self.num_seq - 1):
-                max_len = tf.shape(self.data[i + 1])[1]
-                output, _ = rnn.dynamic_rnn(self.decodernet, tf.concat(2, [self._sentence_input(i, max_len),
+                if self.mode < 2:
+                    max_len = tf.shape(self.data[i + 1])[1]
+                    output, _ = rnn.dynamic_rnn(self.decodernet, tf.concat(2, [self._sentence_input(i, max_len),
                                                                            self._context_input(h, i, max_len)]),
                                             sequence_length=self.length[i + 1], dtype=tf.float32)
-                dec.reuse_variables()
-                # output: batch_size*max_length*h_size
-                decoded.append(tf.matmul(tf.reshape(output, [-1, self.decodernet.output_size]), W2) + b2)
+                    dec.reuse_variables()
+                    # output: batch_size*max_length*h_size
+                    decoded.append(tf.matmul(tf.reshape(output, [-1, self.decodernet.output_size]), self.W2) + self.b2)
+                else:  # mode==2
+                    init_word = self.embedded_word(self.start_word(), [self.batch_size, 1, 300])
+                    initial_state = tf.zeros([self.batch_size, self.h_size])
+                    word_ind, num = 0, 0
+                    if self.batch_size == 1:
+                        while (word_ind != 2 and num < 20):
+                            output, dec_state = rnn.dynamic_rnn(self.decodernet,
+                                                                tf.concat(2, [init_word, self._context_input(h, i, 1)]),
+                                                                dtype=tf.float32, initial_state=initial_state)
+                            dec.reuse_variables()
+                            initial_state = dec_state
+                            word_ind = tf.argmax(tf.nn.softmax(
+                                tf.matmul(tf.reshape(output, [-1, self.decodernet.output_size]), self.W2) + self.b2), 1)
+                            init_word = self.embedded_word(tf.one_hot(word_ind, self.vocab_size, dtype=tf.float32),
+                                                           [self.batch_size, 1, 300])
 
-            return decoded
+                            decoded_sequence.append(word_ind[0])
+
+            return decoded if self.mode < 2 else decoded_sequence
 
     @define_scope
     def prediction(self):

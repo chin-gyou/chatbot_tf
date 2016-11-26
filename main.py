@@ -6,6 +6,8 @@ import os
 import pickle
 import time
 import chat_test
+import sys
+
 # add variables to summary
 def variable_summaries(var, name):
     """Attach a lot of summaries to a Tensor."""
@@ -70,7 +72,6 @@ def train(options):
     threads = tf.train.start_queue_runners(coord=coord, sess=sess)
     time.sleep(1)
     sum_writer = tf.train.SummaryWriter(options.tboard_dir, graph=sess.graph)
-
     # restore from a check point
     if options.load_chkpt:
         print('Loading saved variables from checkpoint file to graph')

@@ -23,7 +23,7 @@ def init_final(function):
     def decorator(self, *args, **kwargs):
         function(self, *args, **kwargs)
         # In test mode, only build graph by prediction, no optimise part
-        if self.mode == 1:
+        if self.mode >= 1:
             self.prediction
         elif self.mode ==0: # train mode, optimise
             self.optimise
@@ -51,15 +51,26 @@ class base_enc_dec:
             self.encodernet = rnn_cell.GRUCell(self.h_size)
         with tf.variable_scope('decode'):
             self.decodernet = rnn_cell.GRUCell(self.h_size)
+            # mapping to vocab probability
+            self.W2 = tf.Variable(tf.zeros([self.decodernet.output_size, self.vocab_size]), dtype=tf.float32,
+                                  name='Output_W')
+            self.b2 = tf.Variable(tf.zeros([self.vocab_size]), dtype=tf.float32, name='Output_b')
+
+    # start word of decoded sequence
+    def start_word(self):
+        return tf.zeros([self.batch_size, 1, self.vocab_size])
+
+    def embedded_word(self, v, shape):
+        reshaped = tf.reshape(v, [-1, self.vocab_size])
+        embedded = tf.matmul(reshaped, self.W) + self.b
+        return tf.reshape(embedded, shape)
 
     # input of last word for decoding sequences
     def _sentence_input(self, i, max_len):
         sentence_input = tf.slice(self.data[i + 1], [0, 1, 0], [self.batch_size, max_len - 1, self.vocab_size])
-        sentence_input = tf.concat(1, [tf.zeros([self.batch_size, 1, self.vocab_size]), sentence_input])
-        concatenated = tf.reshape(sentence_input, [-1, self.vocab_size])
-        embedded = tf.matmul(concatenated, self.W) + self.b
+        sentence_input = tf.concat(1, [self.start_word(), sentence_input])
         shape = tf.shape(self.data[i + 1])
-        return tf.reshape(embedded, [shape[0], shape[1], 300])
+        return self.embedded_word(sentence_input, [shape[0], shape[1], 300])
 
     # encode in word-level, return a list of encode_states for the first {num_seq-1} sequences
     # encoder_state[i]: the encoder_state of the (i+1)-th sentence, shape=batch_size*h_state, the first one is zero initialisation
@@ -127,8 +138,6 @@ class base_enc_dec:
 
     @define_scope
     def optimise(self):
-        if int(self.mode) == 2:
-            return
         optim = tf.train.AdamOptimizer(self.learning_rate)
         global_step = tf.Variable(0, name='global_step', trainable=False)
         train_op = optim.minimize(self.cost, global_step=global_step)

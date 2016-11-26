@@ -43,7 +43,6 @@ class sphred_enc_dec(hred_enc_dec):
         h_state = [tf.zeros([self.batch_size, self.c_size])] * (self.num_seq - self.decoded - 1)
         # encode in sentence-level
         with tf.variable_scope('hierarchical') as hier:
-            print 'hier', hier.name
             initial_stateA, initial_stateB = tf.zeros([self.batch_size, self.c_size]), tf.zeros(
                 [self.batch_size, self.c_size])
             # run sequence-level rnn until decoding is needed, these states don't need to be stored
