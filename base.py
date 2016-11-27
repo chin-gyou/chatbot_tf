@@ -67,7 +67,7 @@ class base_enc_dec:
 
     # input of last word for decoding sequences
     def _sentence_input(self, i, max_len):
-        sentence_input = tf.slice(self.data[i + 1], [0, 1, 0], [self.batch_size, max_len - 1, self.vocab_size])
+        sentence_input = tf.slice(self.data[i + 1], [0, 0, 0], [self.batch_size, max_len - 1, self.vocab_size])
         sentence_input = tf.concat(1, [self.start_word(), sentence_input])
         shape = tf.shape(self.data[i + 1])
         return self.embedded_word(sentence_input, [shape[0], shape[1], 300])
