@@ -147,7 +147,7 @@ if __name__ == '__main__':
     parser.add_option("--learning-rate", dest="lr", help="Learning Rate", default=0.0001)
     parser.add_option("--num-epochs", dest="num_epochs", help="Number of epochs", default=20)
     parser.add_option("--num-seq", dest="num_seq", help="Number of sequences per dialogue", default=3)
-    parser.add_option("--hsize", dest="h_size", help="Size of hidden layer in word level", default=300)
+    parser.add_option("--hsize", dest="h_size", help="Size of hidden layer in word level", default=500)
     parser.add_option("--csize", dest="c_size", help="Size of hidden layer in sequence-level", default=1000)
     parser.add_option("--zsize", dest="z_size", help="Size of latent variable", default=500)
     parser.add_option("--decoded", dest="decoded", help="Number of decoded sequences per dialogue", default=1)
