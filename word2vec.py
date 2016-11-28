@@ -34,7 +34,7 @@ class word2vec:
 
 if __name__=='__main__':
     model=word2vec('./data/GoogleNews-vectors-negative300.bin')
-    with open('data/UbuntuDialogueCorpus/Dataset.dict.pkl','rb') as f:
+    with open('data/MovieTriples_Dataset/Training.dict.pkl', 'rb') as f:
         dicts=pickle.load(f)
-        model.save_wordvecs(dicts,'embedding.mat')
+        model.save_wordvecs(dicts, 'movie_embedding.mat')
         print(model.oov)

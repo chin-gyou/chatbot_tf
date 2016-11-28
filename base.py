@@ -1,6 +1,7 @@
 import functools
 import tensorflow as tf
 from tensorflow.python.ops import rnn_cell, rnn
+import numpy as np
 
 
 # force every function to execute only once
@@ -45,15 +46,15 @@ class base_enc_dec:
 
     def __init__(self, data, labels, length, h_size, e_size, batch_size, num_seq, vocab_size, embedding, learning_rate, decoded=1, mode=0):
         self.__dict__.update(locals())
+        # word embedding matrix
         self.W = tf.Variable(self.embedding, name='Embedding_W')
         self.b = tf.Variable(tf.zeros([self.e_size]), dtype=tf.float32, name='Embedding_b')
         with tf.variable_scope('encode'):
             self.encodernet = rnn_cell.GRUCell(self.h_size)
         with tf.variable_scope('decode'):
             self.decodernet = rnn_cell.GRUCell(self.h_size)
-            # mapping to vocab probability
-            self.W2 = tf.Variable(tf.zeros([self.decodernet.output_size, self.vocab_size]), dtype=tf.float32,
-                                  name='Output_W')
+            # mapping to vocab probability, initialised as the inverse matrix of embedding
+            self.W2 = tf.Variable(np.linalg.inv(self.embedding), name='Output_W')
             self.b2 = tf.Variable(tf.zeros([self.vocab_size]), dtype=tf.float32, name='Output_b')
 
     # start word of decoded sequence

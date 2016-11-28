@@ -24,7 +24,7 @@ class Dense():
     # Helper to initialize weights and biases, via He's adaptation
     # of Xavier init for ReLUs: https://arxiv.org/abs/1502.01852
     @staticmethod
-    def wbVars(fan_in: int, fan_out: int):
+    def wbVars(fan_in, fan_out):
 
         stddev = tf.cast((2 / fan_in) ** 0.5, tf.float32)
 

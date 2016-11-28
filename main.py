@@ -155,7 +155,7 @@ if __name__ == '__main__':
     parser.add_option("--load-chkpt", dest="load_chkpt", help="Path to checkpoint file. Required for mode:1",
                       default='')
     (options, _) = parser.parse_args()
-    if options.mode == '0':
+    if int(options.mode) == 0:
         train(options)
     else:
         test(options)

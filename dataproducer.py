@@ -97,7 +97,7 @@ class data_producer:
 
     # divide dialogues into several turns
     # dialogue is a list with every element is a word_index
-    def divide_raw_data(self, dialogues, fout):
+    def divide_raw_data(self, dialogues, fout, end_index):
         output, divided_dialogue = [], []
         for dialogue in dialogues:
             output.append(divided_dialogue)
@@ -106,9 +106,9 @@ class data_producer:
                 if not seq:
                     divided_dialogue.append(seq)
                 seq.append(w + 1)
-                if w == 1:  # end-of-turn token
+                if w == end_index:  # end-of-turn token
                     seq = []
-            seq.append(2)  # end-of-turn,finish the dialogue
+            # seq.append(2)  # end-of-turn,finish the dialogue
             divided_dialogue = []
         print(len(output))
         with open(fout, 'wb') as f:
@@ -135,12 +135,18 @@ if __name__ == '__main__':
     #    length, labels, data = sess.run(producer.batch_data(1))
     #    print(labels)
     # coord.join(threads)
-    with open('test_data.pkl', 'rb') as f:
-        labels = pickle.load(f)
-        random.shuffle(labels)
-        print(len(labels))
-        sequence = np.random.choice([0, 1], size=(3,), p=[1. / 3, 2. / 3])
-        emotions = [sequence for l in labels]
-        print(len(emotions))
+    with open('./data/MovieTriples_Dataset/Subtle_Dataset.triples.pkl', 'rb') as f:
+        subtle = pickle.load(f)
+        producer.divide_raw_data(subtle, 'divided_subtle.pkl', 2)
+    with open('divided_subtle.pkl', 'rb') as f:
+        divided = pickle.load(f)
+        seqs = producer.produce_input_data(divided, 2, 'subtle_data.pkl')
+        # with open('data_5t.pkl', 'rb') as f:
+        #    labels = pickle.load(f)
+        #    random.shuffle(labels)
+        #    print(len(labels))
+        # sequence = np.random.choice([0, 1], size=(3,), p=[1. / 3, 2. / 3])
+        # emotions = [sequence for l in labels]
+        #print(len(emotions))
         # print(labels[-30:])
-        producer.save_record(labels, './input.tfrecord.test', emotions)
+        #    producer.save_record(labels, './tfrecord_5t')
