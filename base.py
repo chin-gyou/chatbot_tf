@@ -54,7 +54,7 @@ class base_enc_dec:
         with tf.variable_scope('decode'):
             self.decodernet = rnn_cell.GRUCell(self.h_size)
             # mapping to vocab probability, initialised as the inverse matrix of embedding
-            self.W2 = tf.Variable(np.linalg.inv(self.embedding), name='Output_W')
+            self.W2 = tf.Variable(np.transpose(self.embedding), name='Output_W')
             self.b2 = tf.Variable(tf.zeros([self.vocab_size]), dtype=tf.float32, name='Output_b')
 
     # start word of decoded sequence
