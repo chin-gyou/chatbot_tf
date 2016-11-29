@@ -65,7 +65,7 @@ class hred_enc_dec(base_enc_dec):
                     initial_state = tf.zeros([self.batch_size, self.h_size])
                     word_ind, num = 0, 0
                     if self.batch_size == 1:
-                        while (word_ind != 2 or num < 20):
+                        while (word_ind != 2 and num < 20):
                             output, dec_state = rnn.dynamic_rnn(self.decodernet,
                                                                 tf.concat(2, [init_word, self._context_input(h, i, 1)]),
                                                                 dtype=tf.float32, initial_state=initial_state)
@@ -75,7 +75,7 @@ class hred_enc_dec(base_enc_dec):
                                 tf.matmul(tf.reshape(output, [-1, self.decodernet.output_size]), self.W2) + self.b2), 1)
                             init_word = self.embedded_word(tf.one_hot(word_ind, self.vocab_size, dtype=tf.float32),
                                                            [self.batch_size, 1, 300])
-
+                            num += 1
                             decoded_sequence.append(word_ind[0])
 
             return decoded if self.mode < 2 else decoded_sequence
