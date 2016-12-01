@@ -43,10 +43,12 @@ class base_enc_dec:
     decoded: number of decoded senquences, by default only decode the last sequence
     """
 
-    def __init__(self, data, labels, length, h_size, e_size, batch_size, num_seq, vocab_size, embedding, learning_rate, decoded=1, mode=0):
+    def __init__(self, data, labels, length, h_size, e_size, batch_size, num_seq, vocab_size, embedding, learning_rate,
+                 decoded=1, mode=0, bn=0):
         self.__dict__.update(locals())
         self.W = tf.Variable(self.embedding, name='Embedding_W')
         self.b = tf.Variable(tf.zeros([self.e_size]), dtype=tf.float32, name='Embedding_b')
+
         with tf.variable_scope('encode'):
             self.encodernet = rnn_cell.GRUCell(self.h_size)
         with tf.variable_scope('decode'):
@@ -125,6 +127,7 @@ class base_enc_dec:
         mean_loss = tf.reduce_mean(mean_loss_by_example)
         return mean_loss
 
+    # cost for training
     # cost computes the loss when decoding the specified {decoded} sequences
     # returned loss is the mean loss for every decoded sequence
     @define_scope
@@ -133,6 +136,16 @@ class base_enc_dec:
         for i in range(1, self.decoded + 1):
             y_flat = tf.reshape(self.labels[-i], [-1])
             losses = tf.nn.sparse_softmax_cross_entropy_with_logits(self.prediction[-i], y_flat)
+            total_loss += self.mean_cross_entropy(y_flat, losses, i)
+        return total_loss / self.decoded
+
+    # percentage of predicted word in the top-k list
+    # averaged for {decoded} sequences
+    def top_k_per(self, k):
+        total_loss = 0
+        for i in range(1, self.decoded + 1):
+            y_flat = tf.reshape(self.labels[-i], [-1])
+            losses = tf.cast(tf.nn.in_top_k(self.prediction[-i], y_flat, k), tf.float32)
             total_loss += self.mean_cross_entropy(y_flat, losses, i)
         return total_loss / self.decoded
 

@@ -22,6 +22,11 @@ def variable_summaries(var, name):
     tf.histogram_summary(name, var)
 
 
+def weight_summaries(tag, w, name):
+    a, b = tf.shape(w)
+    var = tf.reshape(w, [1, a, b, 1])
+    tf.image_summary(tag, var, name)
+
 def build_graph(options):
     # get input file list and word vectors
     word_vecs, word_dict = 0, 0
@@ -61,7 +66,6 @@ def build_graph(options):
 def train(options):
     model = build_graph(options)
     variable_summaries(model.cost, 'loss')
-
     merged = tf.merge_all_summaries()
     saver = tf.train.Saver()
 
@@ -116,12 +120,13 @@ def test(options):
 
     try:
         restore_trainable(sess, options.load_chkpt)
-        step = 0
+        step, total_loss = 0
         while not coord.should_stop():
             batch_loss, summary = sess.run([model.cost, merged])
             step += 1
             if step % 100 == 0:
-                print('[size:%d]Mini-Batches run : %d\t\tLoss : %f' % (int(options.batch_size), step, batch_loss))
+                print('[size:%d]Mini-Batches run : %d\t\tLoss : %f\t\tMean Loss: %f' % (
+                int(options.batch_size), step, batch_loss, total_loss / step))
     except tf.errors.OutOfRangeError:
         print('Training Complete...')
     finally:

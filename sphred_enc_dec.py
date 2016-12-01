@@ -12,10 +12,14 @@ length = np.array([[3] * 2] * 5)
 class sphred_enc_dec(hred_enc_dec):
     # c_size: hidden layer size of sentence-level RNN
     @init_final
-    def __init__(self, data, labels, length, h_size, e_size, c_size, batch_size, num_seq, vocab_size, embedding,learning_rate,
-                 decoded=1,mode=0):
+    def __init__(self, data, labels, length, h_size, e_size, c_size, batch_size, num_seq, vocab_size, embedding, learning_rate,
+                 decoded=1, mode=0, bn=0):
         hred_enc_dec.__init__(self, data, labels, length, h_size, e_size, c_size, batch_size, num_seq, vocab_size,
-                              embedding, learning_rate,decoded,mode)
+                              embedding, learning_rate, decoded, mode, bn)
+
+    # input size to the final decoder
+    def decoder_in_size(self):
+        return 2 * self.c_size + 300
 
     # input of context for decoding sequences
     def _context_input(self, h, i, max_len):
