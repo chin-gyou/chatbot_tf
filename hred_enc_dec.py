@@ -12,7 +12,7 @@ class hred_enc_dec(base_enc_dec):
         self.c_size = c_size
         with tf.variable_scope('hierarchical'):
             self.hred = rnn_cell.GRUCell(self.c_size)
-            # batch normalization parameters
+        # batch normalization parameters
         if bn:
             self.scale = tf.Variable(tf.ones([self.decoder_in_size()]), dtype=tf.float32, name='Embedding_b')
             self.offset = tf.Variable(tf.zeros([self.decoder_in_size()]), dtype=tf.float32, name='Embedding_b')

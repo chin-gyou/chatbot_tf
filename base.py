@@ -41,10 +41,13 @@ class base_enc_dec:
     e_size: embedding vector size for one word
     embedding: initialising embedding matrix, vocab_size*e_size
     decoded: number of decoded senquences, by default only decode the last sequence
+    bn: whether batch normalisation is used for context concatenation
+    base_rnn: whether put the ending state of a sequence as the starting state of the next one, defautl not
     """
 
+    @init_final
     def __init__(self, data, labels, length, h_size, e_size, batch_size, num_seq, vocab_size, embedding, learning_rate,
-                 decoded=1, mode=0, bn=0):
+                 decoded=1, mode=0, bn=0, base_rnn=0):
         self.__dict__.update(locals())
         self.W = tf.Variable(self.embedding, name='Embedding_W')
         self.b = tf.Variable(tf.zeros([self.e_size]), dtype=tf.float32, name='Embedding_b')
@@ -75,27 +78,48 @@ class base_enc_dec:
         return self.embedded_word(sentence_input, [shape[0], shape[1], 300])
 
     # encode in word-level, return a list of encode_states for the first {num_seq-1} sequences
-    # encoder_state[i]: the encoder_state of the (i+1)-th sentence, shape=batch_size*h_state, the first one is zero initialisation
+    # encoder_state[i]: the encoder_state of the (i-1)-th sentence, shape=batch_size*h_state, the first one is zero initialisation
     def encode_word(self):
         encoder_states = [tf.zeros([self.batch_size, self.h_size])]  # zero-initialisation for the first state
 
         # encode in word-level
         with tf.variable_scope('encode') as enc:
+            initial_state = tf.zeros([self.batch_size, self.h_size])
             for i in range(self.num_seq):
                 concatenated = tf.reshape(self.data[i], [-1, self.vocab_size])
                 embedded = tf.matmul(concatenated, self.W) + self.b
                 shape = tf.shape(self.data[i])
                 _, encoder_state = rnn.dynamic_rnn(self.encodernet, tf.reshape(embedded, [shape[0], shape[1], 300]),
-                                                   sequence_length=self.length[i], dtype=tf.float32)
+                                                   sequence_length=self.length[i], dtype=tf.float32,
+                                                   initial_state=initial_state)
                 enc.reuse_variables()
+                if self.base_rnn:
+                    initial_state = encoder_state
                 encoder_states.append(encoder_state)
         return encoder_states
+
+    def decode(self, e):
+        decoded = []
+        with tf.variable_scope('decode') as dec:
+            # decode, starts from the context state before the first decoded sequence
+            for i in range(self.num_seq - self.decoded - 1, self.num_seq - 1):
+                if self.mode < 3:
+                    max_len = tf.shape(self.data[i + 1])[1]
+                    output, _ = rnn.dynamic_rnn(self.decodernet, self._sentence_input(i, max_len),
+                                                sequence_length=self.length[i + 1], dtype=tf.float32,
+                                                initial_state=e[i + 1])
+                    dec.reuse_variables()
+                    # output: batch_size*max_length*h_size
+                    decoded.append(tf.matmul(tf.reshape(output, [-1, self.decodernet.output_size]), self.W2) + self.b2)
+        return decoded
 
     # prediction runs the forward computation
     # the output should be of size {decoded*batch_size*max_length}*vocab_size
     @define_scope
     def prediction(self):
-        pass
+        encoder_states = base_enc_dec.encode_word(self)
+        output = self.decode(encoder_states)
+        return output
 
     @define_scope
     # loss when decoding only the last sequence, already deprecated
