@@ -38,7 +38,8 @@ def sp_chat_test(options, vocab_size, e_size, word_vecs):
 
     feed_dict_part = {i: d for i, d in zip(encode_input_tf, input_seqs)}
     decoded_seq = sess.run(model.prediction, feed_dict=feed_dict_part)
-    print('_:  ', ' '.join([index_word_dic[i] for i in decoded_seq]))
+    for j in decoded_seq:
+	print('_:  ', ' '.join([index_word_dic[i] for i in j]))
 
 
 def main_chat_test(options, vocab_size, e_size, word_vecs):
