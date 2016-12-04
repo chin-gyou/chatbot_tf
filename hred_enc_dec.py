@@ -6,9 +6,6 @@ class hred_enc_dec(base_enc_dec):
     @init_final
     def __init__(self, data, labels, length, h_size, e_size, c_size, batch_size, num_seq, vocab_size, embedding, learning_rate,
                  decoded=1, mode=0, bn=0):
-        base_enc_dec.__init__(self, data, labels, length, h_size, e_size, batch_size, num_seq, vocab_size, embedding, learning_rate,
-                              decoded, mode, bn)
-
         self.c_size = c_size
         with tf.variable_scope('hierarchical'):
             self.hred = rnn_cell.GRUCell(self.c_size)
@@ -16,6 +13,9 @@ class hred_enc_dec(base_enc_dec):
         if bn:
             self.scale = tf.Variable(tf.ones([self.decoder_in_size()]), dtype=tf.float32, name='Embedding_b')
             self.offset = tf.Variable(tf.zeros([self.decoder_in_size()]), dtype=tf.float32, name='Embedding_b')
+        base_enc_dec.__init__(self, data, labels, length, h_size, e_size, batch_size, num_seq, vocab_size, embedding,
+                              learning_rate,
+                              decoded, mode, bn)
 
     # input size to the final decoder
     def decoder_in_size(self):
