@@ -15,7 +15,7 @@ class sphred_enc_dec(hred_enc_dec):
     def __init__(self, data, labels, length, h_size, e_size, c_size, batch_size, num_seq, vocab_size, embedding, learning_rate,
                  decoded=1, mode=0, bn=0):
         hred_enc_dec.__init__(self, data, labels, length, h_size, e_size, c_size, batch_size, num_seq, vocab_size,
-                              embedding, learning_rate, decoded, mode, bn)
+                              embedding, learning_rate, decoded, mode)
 
     # input size to the final decoder
     def decoder_in_size(self):
@@ -75,6 +75,54 @@ class sphred_enc_dec(hred_enc_dec):
                                                         dtype=tf.float32, initial_state=initial_stateB)
                     h_state.append(initial_stateB)
             return h_state
+
+    # decode specified {decoded} senquences
+    # h and e are sequence-level and word-level hidden states
+    # return a list in which each item is of size batch_size*max_length*vocab_size
+    def decode(self, h, e):
+        # decoded array keeps the output for all decoded sequences
+        decoded, decoded_sequence = [], []
+        with tf.variable_scope('decode') as dec:
+            # decode, starts from the context state before the first decoded sequence
+            for i in range(self.num_seq - self.decoded - 1, self.num_seq - 1):
+                if self.mode < 2:
+                    max_len = tf.shape(self.data[i + 1])[1]
+                    output, _ = rnn.dynamic_rnn(self.decodernet, self._decoder_input(h, i, max_len),
+                                                sequence_length=self.length[i + 1], dtype=tf.float32)
+                    dec.reuse_variables()
+                    # output: batch_size*max_length*h_size
+                    decoded.append(tf.matmul(tf.reshape(output, [-1, self.decodernet.output_size]), self.W2) + self.b2)
+		if self.mode == 2:  # generate response
+		    
+                    k = 0
+                    inp = self.embedded_word(self.start_word(), [1, 1, 300])
+                    initial_state = tf.zeros([1, self.h_size])
+                    state = initial_state
+                    outputs = []
+                    prev = None
+                    state_size = int(initial_state.get_shape().with_rank(2)[1])
+                    while k < 12:
+			if k == 1:
+                            h[i] = tf.tile(h[i], [5, 1])
+                            h[i+1] = tf.tile(h[i+1], [5, 1])
+                        if prev is not None:
+                            inp = self.beam_search(prev, k)
+                            shape = inp.get_shape()
+                            inp = tf.reshape(inp, [int(shape[0]),1, int(shape[1])])
+                        if k > 0:
+                            dec.reuse_variables()
+                        length = 1 if k == 0 else self.beam_size
+                        output, state = rnn.dynamic_rnn(self.decodernet,
+                                                        tf.concat(2, [inp, self._context_input(h, i, 1)]),
+                                                        dtype=tf.float32, initial_state=state)
+			
+                        prev = output
+                        if k == 0:
+                            state = tf.tile(state,[5,1])
+                        k += 1
+                    decoded_sequence =  tf.reshape(self.output_beam_symbols[-1], [self.beam_size, -1])
+        return decoded if self.mode < 2 else decoded_sequence
+
 
     # only decode last sequence, deprecated
     def __decode_last(self, h_a, h_b, e):

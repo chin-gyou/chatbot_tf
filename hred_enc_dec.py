@@ -5,7 +5,7 @@ from base import *
 class hred_enc_dec(base_enc_dec):
     @init_final
     def __init__(self, data, labels, length, h_size, e_size, c_size, batch_size, num_seq, vocab_size, embedding, learning_rate,
-                 decoded=1, mode=0, bn=0, beam_size=5):
+                 decoded=1, mode=0, bn=0, beam_size=1):
         self.c_size = c_size
         self.beam_size = beam_size
         self.log_beam_probs, self.beam_path,self.output_beam_symbols, self.beam_symbols = [], [], [],[]
@@ -83,30 +83,31 @@ class hred_enc_dec(base_enc_dec):
                     dec.reuse_variables()
                     # output: batch_size*max_length*h_size
                     decoded.append(tf.matmul(tf.reshape(output, [-1, self.decodernet.output_size]), self.W2) + self.b2)
-                if self.mode == 2:  # generate response
+		if self.mode == 2:  # generate response
+                    k = 0
                     inp = self.embedded_word(self.start_word(), [1, 1, 300])
                     initial_state = tf.zeros([1, self.h_size])
                     state = initial_state
                     outputs = []
                     prev = None
-
                     state_size = int(initial_state.get_shape().with_rank(2)[1])
-                    k = 0
-                    while k < 6:
+                    while k < 12:
+			if k == 1:
+                            h[i+1] = tf.tile(h[i+1], [self.beam_size, 1])
                         if prev is not None:
                             inp = self.beam_search(prev, k)
                             shape = inp.get_shape()
-                            inp = tf.reshape(inp, [1, int(shape[0]), int(shape[1])])
+                            inp = tf.reshape(inp, [int(shape[0]),1, int(shape[1])])
                         if k > 0:
                             dec.reuse_variables()
                         length = 1 if k == 0 else self.beam_size
                         output, state = rnn.dynamic_rnn(self.decodernet,
-                                                        tf.concat(2, [inp, self._context_input(h, i, length)]),
+                                                        tf.concat(2, [inp, self._context_input(h, i, 1)]),
                                                         dtype=tf.float32, initial_state=state)
 			
                         prev = output
                         if k == 0:
-                            state = tf.reshape(tf.concat(0, state), [-1, state_size])
+                            state = tf.tile(state,[self.beam_size,1])
                         k += 1
                     decoded_sequence =  tf.reshape(self.output_beam_symbols[-1], [self.beam_size, -1])
         return decoded if self.mode < 2 else decoded_sequence
@@ -116,13 +117,13 @@ class hred_enc_dec(base_enc_dec):
                     tf.matmul(tf.reshape(prev, [-1, self.decodernet.output_size]), self.W2) + self.b2))
         minus_probs = [0 for i in range(self.vocab_size)]
         minus_probs[1] = -1e20
-        probs = probs +  minus_probs
-        if k > 1:
+        probs = probs +  tf.constant(minus_probs)
+	if k > 1:
             probs = tf.reshape(probs + self.log_beam_probs[-1],
                                [-1, self.beam_size * self.vocab_size])
-
+	
         best_probs, indices = tf.nn.top_k(probs, self.beam_size)
-        indices = tf.reshape(indices, [-1, 1])
+        indices = tf.squeeze(tf.reshape(indices, [-1, 1]))
         best_probs = tf.reshape(best_probs, [-1, 1])
 
         symbols = indices % self.vocab_size  # Which word in vocabulary.
@@ -136,7 +137,6 @@ class hred_enc_dec(base_enc_dec):
         self.output_beam_symbols.append(symbols_live)
         self.beam_symbols.append(symbols)
         self.log_beam_probs.append(best_probs)
-
         concatenated = tf.reshape(
                         tf.one_hot(symbols, depth=self.vocab_size, dtype=tf.float32), [-1, self.vocab_size])
         embedded = tf.matmul(concatenated, self.W) + self.b
