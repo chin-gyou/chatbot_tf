@@ -5,7 +5,7 @@ from base import *
 class hred_enc_dec(base_enc_dec):
     @init_final
     def __init__(self, data, labels, length, h_size, e_size, c_size, batch_size, num_seq, vocab_size, embedding, learning_rate,
-                 decoded=1, mode=0, bn=0, beam_size=1):
+                 decoded=1, mode=0, bn=0, beam_size=5):
         self.c_size = c_size
         self.beam_size = beam_size
         self.log_beam_probs, self.beam_path,self.output_beam_symbols, self.beam_symbols = [], [], [],[]
