@@ -14,9 +14,9 @@ class hred_enc_dec(base_enc_dec):
         self.model = model
         self.log_beam_probs, self.beam_path, self.output_beam_symbols, self.beam_symbols = [], [], [], []
         with tf.variable_scope('encode'):
-            self.encodernet = rnn_cell.GRUCell(c_size)
+            self.encodernet = rnn_cell.GRUCell(h_size)
         with tf.variable_scope('hierarchical'):
-            self.hred = rnn_cell.GRUCell(h_size)
+            self.hred = rnn_cell.GRUCell(c_size)
         # batch normalization parameters
         if bn:
             self.scale = tf.Variable(tf.ones([self.decoder_in_size()]), dtype=tf.float32, name='Bn_scale')
@@ -54,13 +54,13 @@ class hred_enc_dec(base_enc_dec):
         with tf.variable_scope('decode') as dec:
             # probability for the first sequence
             hier_0 = tf.slice(tf.pack(hier[0]), [0, 0, 0],
-                              [tf.shape(self.data[0])[1] - 1, self.batch_size, self.h_size])
-            hier_0 = tf.reshape(hier_0, [-1, self.batch_size, self.h_size])
+                              [tf.shape(self.data[0])[1] - 1, self.batch_size, self.c_size])
+            hier_0 = tf.reshape(hier_0, [-1, self.batch_size, self.c_size])
             seq_input = tf.transpose(hier_0, perm=[1, 0, 2])
             if self.model == 1:
                 dummy_0 = tf.slice(tf.pack(dummy[0]), [0, 0, 0],
-                                   [tf.shape(self.data[0])[1] - 1, self.batch_size, self.c_size])
-                dummy_0 = tf.reshape(dummy_0, [-1, self.batch_size, self.c_size])
+                                   [tf.shape(self.data[0])[1] - 1, self.batch_size, self.h_size])
+                dummy_0 = tf.reshape(dummy_0, [-1, self.batch_size, self.h_size])
                 seq_input = tf.concat(2, [tf.transpose(hier_0, perm=[1, 0, 2]), tf.transpose(dummy_0, perm=[1, 0, 2])])
             output, _ = rnn.dynamic_rnn(self.decodernet, seq_input, dtype=tf.float32)
             # the probability for the first word is zero padded, not trainable
@@ -73,22 +73,22 @@ class hred_enc_dec(base_enc_dec):
             for i in range(1, self.num_seq):
 
                 hier_i = tf.slice(tf.pack(hier[i]), [0, 0, 0],
-                                  [tf.shape(self.data[i])[1] - 1, self.batch_size, self.h_size])
+                                  [tf.shape(self.data[i])[1] - 1, self.batch_size, self.c_size])
                 whole_last_hier = tf.pack(hier[i - 1])  # 100*batch_size*h_size
                 last_hier = []
                 for j in range(self.batch_size):
                     last_hier.append(
-                        tf.reshape(tf.slice(whole_last_hier, [self.length[i - 1, j] - 1, j, 0], [1, 1, self.h_size]),
-                                   [self.h_size]))
+                        tf.reshape(tf.slice(whole_last_hier, [self.length[i - 1, j] - 1, j, 0], [1, 1, self.c_size]),
+                                   [self.c_size]))
                 last_hier = tf.pack(last_hier)  # batch_size*h_size
-                hier_i = tf.concat(0, [tf.reshape(last_hier, [1, self.batch_size, self.h_size]), hier_i])
+                hier_i = tf.concat(0, [tf.reshape(last_hier, [1, self.batch_size, self.c_size]), hier_i])
                 seq_input = tf.transpose(hier_i, perm=[1, 0, 2])
                 if self.model == 1:
                     dummy_i = tf.slice(tf.pack(dummy[i]), [0, 0, 0],
-                                       [tf.shape(self.data[i])[1] - 1, self.batch_size, self.c_size])
+                                       [tf.shape(self.data[i])[1] - 1, self.batch_size, self.h_size])
                     last_dummy = dummy[i - 1][-1]
 
-                    dummy_i = tf.concat(0, [tf.reshape(last_dummy, [1, self.batch_size, self.c_size]), dummy_i])
+                    dummy_i = tf.concat(0, [tf.reshape(last_dummy, [1, self.batch_size, self.h_size]), dummy_i])
                     seq_input = tf.concat(2, [tf.transpose(hier_i, perm=[1, 0, 2]),
                                               tf.transpose(dummy_i, perm=[1, 0, 2])])
                 output, _ = rnn.dynamic_rnn(self.decodernet, seq_input, dtype=tf.float32)
@@ -119,10 +119,10 @@ class hred_enc_dec(base_enc_dec):
 
         with tf.variable_scope('encode') as enc:
             for i in range(self.num_seq):
-                hier.append([tf.Variable(tf.zeros([self.batch_size, self.h_size]))] * 100)
-                dummy.append([tf.Variable(tf.zeros([self.batch_size, self.c_size]))] * 100)
-                initial_state = tf.zeros([self.batch_size, self.c_size])
-                h_init = tf.zeros([self.batch_size, self.h_size])
+                hier.append([tf.Variable(tf.zeros([self.batch_size, self.c_size]))] * 100)
+                dummy.append([tf.Variable(tf.zeros([self.batch_size, self.h_size]))] * 100)
+                initial_state = tf.zeros([self.batch_size, self.h_size])
+                h_init = tf.zeros([self.batch_size, self.c_size])
                 concatenated = tf.reshape(self.data[i], [-1, self.vocab_size])
                 embedded = tf.matmul(concatenated, self.W) + self.b
                 seq_input = tf.reshape(embedded,
@@ -131,13 +131,13 @@ class hred_enc_dec(base_enc_dec):
                     # if j<max_len, return hidden state, else, zeros state
                     print(j)
                     h_j = tf.cond(tf.less(j, tf.shape(self.data[i])[1]), lambda: rnnstep(j, seq_input, initial_state),
-                                  lambda: tf.zeros([self.batch_size, self.c_size]))
+                                  lambda: tf.zeros([self.batch_size, self.h_size]))
                     initial_state = h_j
                     if self.model > 0:
                         for k in range(j, 100):
                             tf.assign_add(dummy[i][j], h_j)
                     hs_j = tf.cond(tf.less(j, tf.shape(self.data[i])[1]), lambda: hrnnstep(h_j, h_init),
-                                   lambda: tf.zeros([self.batch_size, self.h_size]))
+                                   lambda: tf.zeros([self.batch_size, self.c_size]))
                     tf.assign(hier[i][j], hs_j)
                     h_init = hs_j
                     enc.reuse_variables()
