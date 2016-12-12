@@ -55,7 +55,7 @@ def build_graph(options):
         sys.exit(0)
     # build model and graph
     model = hred_enc_dec(data, labels, length, int(options.h_size), e_size,int(options.c_size), int(options.batch_size),
-                            int(options.num_seq), vocab_size, word_vecs, float(options.lr),int(options.decoded),int(options.mode),0,5,1)
+                            int(options.num_seq), vocab_size, word_vecs, float(options.lr),int(options.decoded),int(options.mode),0,5,int(options.bi))
     #model = em_sp_enc_dec(data, labels, length, emotions, 2, int(options.h_size), e_size, int(options.c_size),
     #                      int(options.z_size), int(options.batch_size),
     #                      int(options.num_seq), vocab_size, word_vecs, float(options.lr), int(options.decoded),
@@ -154,6 +154,7 @@ if __name__ == '__main__':
     parser.add_option("--num-seq", dest="num_seq", help="Number of sequences per dialogue", default=3)
     parser.add_option("--hsize", dest="h_size", help="Size of hidden layer in word level", default=500)
     parser.add_option("--csize", dest="c_size", help="Size of hidden layer in sequence-level", default=1000)
+    parser.add_option("--bi", dest="bi", help="Bidirectional option", default=0)
     parser.add_option("--zsize", dest="z_size", help="Size of latent variable", default=500)
     parser.add_option("--decoded", dest="decoded", help="Number of decoded sequences per dialogue", default=1)
     parser.add_option("--run-mode", dest="mode", help="0 for train, 1 for test, 2 for test decode word", default=0)
