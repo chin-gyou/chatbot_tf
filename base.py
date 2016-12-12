@@ -82,8 +82,10 @@ class base_enc_dec:
     # encode in word-level, return a list of encode_states for the first {num_seq-1} sequences
     # encoder_state[i]: the encoder_state of the (i-1)-th sentence, shape=batch_size*h_state, the first one is zero initialisation
     def encode_word(self):
-        encoder_states = [tf.zeros([self.batch_size, self.h_size])]  # zero-initialisation for the first state
-
+        if self.bi==0:
+            encoder_states = [tf.zeros([self.batch_size, self.h_size])]  # zero-initialisation for the first state
+        else:
+            encoder_states = [tf.zeros([self.batch_size, 2*self.h_size])]
         # encode in word-level
         with tf.variable_scope('encode') as enc:
             initial_state = tf.zeros([self.batch_size, self.h_size])
