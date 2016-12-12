@@ -47,13 +47,15 @@ class base_enc_dec:
 
     @init_final
     def __init__(self, data, labels, length, h_size, e_size, batch_size, num_seq, vocab_size, embedding, learning_rate,
-                 decoded=1, mode=0, bn=0, base_rnn=0):
+                 decoded=1, mode=0, bn=0, base_rnn=0, bi=0):
         self.__dict__.update(locals())
         self.W = tf.Variable(self.embedding, name='Embedding_W')
         self.b = tf.Variable(tf.zeros([self.e_size]), dtype=tf.float32, name='Embedding_b')
 
         with tf.variable_scope('encode'):
             self.encodernet = rnn_cell.GRUCell(self.h_size)
+            if bi:
+                self.encoderbw = rnn_cell.GRUCell(self.h_size)
         with tf.variable_scope('decode'):
             self.decodernet = rnn_cell.GRUCell(self.h_size)
             # mapping to vocab probability
@@ -89,9 +91,14 @@ class base_enc_dec:
                 concatenated = tf.reshape(self.data[i], [-1, self.vocab_size])
                 embedded = tf.matmul(concatenated, self.W) + self.b
                 shape = tf.shape(self.data[i])
-                _, encoder_state = rnn.dynamic_rnn(self.encodernet, tf.reshape(embedded, [shape[0], shape[1], 300]),
+                if self.bi==0:
+                    _, encoder_state = rnn.dynamic_rnn(self.encodernet, tf.reshape(embedded, [shape[0], shape[1], 300]),
                                                    sequence_length=self.length[i], dtype=tf.float32,
                                                    initial_state=initial_state)
+                else:#bidirectional GRU
+                    _, encoder_state = rnn.bidirectional_dynamic_rnn(self.encodernet, self.encoderbw, tf.reshape(embedded, [shape[0], shape[1], 300]),
+                                                   sequence_length=self.length[i], dtype=tf.float32)
+                    encoder_state = tf.concat(1,encoder_state)
                 enc.reuse_variables()
                 if self.base_rnn:
                     initial_state = encoder_state
