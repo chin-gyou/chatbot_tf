@@ -54,12 +54,12 @@ def build_graph(options):
         chat_test.main_chat_test(options, vocab_size, e_size, word_vecs)
         sys.exit(0)
     # build model and graph
-    # model = hred_enc_dec(data, labels, length, int(options.h_size), e_size,int(options.c_size), int(options.batch_size),
-    #                        int(options.num_seq), vocab_size, word_vecs, float(options.lr),int(options.decoded),int(options.mode))
-    model = em_sp_enc_dec(data, labels, length, emotions, 2, int(options.h_size), e_size, int(options.c_size),
-                          int(options.z_size), int(options.batch_size),
-                          int(options.num_seq), vocab_size, word_vecs, float(options.lr), int(options.decoded),
-                          int(options.mode))
+    model = hred_enc_dec(data, labels, length, int(options.h_size), e_size,int(options.c_size), int(options.batch_size),
+                            int(options.num_seq), vocab_size, word_vecs, float(options.lr),int(options.decoded),int(options.mode),0,5,1)
+    #model = em_sp_enc_dec(data, labels, length, emotions, 2, int(options.h_size), e_size, int(options.c_size),
+    #                      int(options.z_size), int(options.batch_size),
+    #                      int(options.num_seq), vocab_size, word_vecs, float(options.lr), int(options.decoded),
+    #                      int(options.mode))
     return model
 
 
@@ -67,7 +67,7 @@ def train(options):
     model = build_graph(options)
     variable_summaries(model.cost, 'loss')
     merged = tf.merge_all_summaries()
-    saver = tf.train.Saver()
+    saver = tf.train.Saver(keep_checkpoint_every_n_hours=2)
 
     config = tf.ConfigProto(allow_soft_placement = False)
     sess = tf.Session(config=config)
