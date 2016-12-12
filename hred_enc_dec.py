@@ -62,7 +62,11 @@ class hred_enc_dec(base_enc_dec):
                 if i > (self.num_seq - self.decoded - 1):
                     hier.reuse_variables()
                 # every time only moves one step towards, the intermediate states are stored
-                _, initial_state = rnn.dynamic_rnn(self.hred, tf.reshape(e[i + 1], [self.batch_size, 1, self.h_size]),
+		if self.bi:
+                	_, initial_state = rnn.dynamic_rnn(self.hred, tf.reshape(e[i + 1], [self.batch_size, 1, 2*self.h_size]),
+                                                   dtype=tf.float32, initial_state=initial_state)
+		else:
+			_, initial_state = rnn.dynamic_rnn(self.hred, tf.reshape(e[i + 1], [self.batch_size, 1, self.h_size]),
                                                    dtype=tf.float32, initial_state=initial_state)
                 h_state.append(initial_state)
         return h_state
