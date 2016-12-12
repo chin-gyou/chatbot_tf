@@ -17,7 +17,7 @@ class hred_enc_dec(base_enc_dec):
             self.offset = tf.Variable(tf.zeros([self.decoder_in_size()]), dtype=tf.float32, name='Bn_offset')
         base_enc_dec.__init__(self, data, labels, length, h_size, e_size, batch_size, num_seq, vocab_size, embedding,
                               learning_rate,
-                              decoded, mode, bn, bi)
+                              decoded, mode, bn, 0, bi)
 
     # input size to the final decoder
     def decoder_in_size(self):
