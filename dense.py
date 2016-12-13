@@ -17,7 +17,7 @@ class Dense():
                     reshaped=tf.reshape(x,[-1,x_size])
                     result=self.nonlinearity(tf.matmul(reshaped, self.w) + self.b)
                     dims = tf.slice(tf.shape(x), [0], [tf.rank(x) - 1])
-                    new_shape = tf.concat(0, [dims, self.size])
+                    new_shape = tf.concat(0, [dims, [self.size]])
                     return tf.reshape(result, new_shape)
                 except(AttributeError):
                     self.w, self.b = self.wbVars(x_size, self.size, self.name)

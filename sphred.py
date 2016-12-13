@@ -39,5 +39,6 @@ class sphred_enc_dec(hred_enc_dec):
         init_encode = tf.zeros([self.batch_size, self.h_size])
         init_hier = [tf.zeros([self.batch_size, self.c_size]), tf.zeros([self.batch_size, self.c_size])]
         init_decoder = tf.zeros([self.batch_size, self.h_size])
-        _, _, h_d = tf.scan(self.run, self.labels, initializer=[init_encode, init_hier, init_decoder])
+        _, _, h_d = tf.scan(self.run, [self.labels, self.rolled_label],
+                            initializer=[init_encode, init_hier, init_decoder])
         return h_d

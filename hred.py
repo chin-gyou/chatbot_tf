@@ -36,12 +36,13 @@ class hred_enc_dec(base_enc_dec):
     """
 
     def run(self, prev_h, input_labels):
-        mask = self.gen_mask(input_labels)
-        embedding = self.embed_labels(input_labels)
-        h = self.word_level_rnn(prev_h[0], embedding, mask)
+        mask = self.gen_mask(input_labels[0])
+        rolled_mask = self.gen_mask(input_labels[1])
+        embedding = self.embed_labels(input_labels[0])
+        h = self.word_level_rnn(prev_h[0], embedding, rolled_mask)
         h_s = self.hier_level_rnn(prev_h[1], h, mask)
         # concate embedding and h_s for decoding
-        d = self.decode_level_rnn(prev_h[2], tf.concat(1, [self.context_input(h_s), embedding]), mask)
+        d = self.decode_level_rnn(prev_h[2], tf.concat(1, [self.context_input(h_s), embedding]), rolled_mask)
         return [h, h_s, d]
 
     # scan step, return output hidden state of the output layer
@@ -50,5 +51,6 @@ class hred_enc_dec(base_enc_dec):
         init_encode = tf.zeros([self.batch_size, self.h_size])
         init_hier = tf.zeros([self.batch_size, self.c_size])
         init_decoder = tf.zeros([self.batch_size, self.h_size])
-        _, _, h_d = tf.scan(self.run, self.labels, initializer=[init_encode, init_hier, init_decoder])
+        _, _, h_d = tf.scan(self.run, [self.labels, self.rolled_label],
+                            initializer=[init_encode, init_hier, init_decoder])
         return h_d

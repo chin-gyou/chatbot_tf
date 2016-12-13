@@ -40,6 +40,7 @@ class base_enc_dec:
     @init_final
     def __init__(self, labels, length, h_size, vocab_size, embedding, batch_size, learning_rate, mode):
         self.__dict__.update(locals())
+        self.rolled_label = tf.concat(0, [tf.zeros([1, batch_size], dtype=tf.int32), labels[:-1]])
         with tf.variable_scope('encode'):
             self.encodernet = rnn_cell.GRUCell(h_size)
             # embedding matrix
@@ -60,9 +61,9 @@ class base_enc_dec:
 
     def word_level_rnn(self, prev_h, input_embedding, mask):
         with tf.variable_scope('encode'):
+            prev_h = prev_h * mask  # mask the fist state as zero
             _, h_new = self.encodernet(input_embedding, prev_h)
-            h_masked = h_new * mask  # zero state when meeting 0 or 2
-            return h_masked
+            return h_new
 
     """
     decode-level rnn step
@@ -74,9 +75,9 @@ class base_enc_dec:
 
     def decode_level_rnn(self, prev_h, input_h, mask):
         with tf.variable_scope('decode'):
+            prev_h = prev_h * mask  # mask the fist state as zero
             _, h_new = self.decodernet(input_h, prev_h)
-            h_masked = h_new * mask  # zero state when meeting 0 or 2
-            return h_masked
+            return h_new
 
     """
     prev_h[0]: word-level last state
@@ -85,10 +86,10 @@ class base_enc_dec:
     """
 
     def run(self, prev_h, input_labels):
-        mask = self.gen_mask(input_labels)
-        embedding = self.embed_labels(input_labels)
-        h = self.word_level_rnn(prev_h[0], embedding, mask)
-        d = self.decode_level_rnn(prev_h[1], h, mask)
+        rolled_mask = self.gen_mask(input_labels[1])
+        embedding = self.embed_labels(input_labels[0])
+        h = self.word_level_rnn(prev_h[0], embedding, rolled_mask)
+        d = self.decode_level_rnn(prev_h[1], h, rolled_mask)
         return [h, d]
 
     # turn labels into corresponding embeddings
@@ -106,7 +107,7 @@ class base_enc_dec:
     def scan_step(self):
         init_encode = tf.zeros([self.batch_size, self.h_size])
         init_decoder = tf.zeros([self.batch_size, self.h_size])
-        _, h_d = tf.scan(self.run, self.labels, initializer=[init_encode, init_decoder])
+        _, h_d = tf.scan(self.run, [self.labels, self.rolled_label], initializer=[init_encode, init_decoder])
         return h_d
 
     # return output layer

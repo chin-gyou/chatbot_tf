@@ -35,7 +35,7 @@ class data_producer:
         exs = []
         start = 0
         while ((len(dialogue) - 1) > start):
-            length = 80
+            length = limit
             if start + limit > len(dialogue):  # padding 0
                 length = len(dialogue) - start
                 dialogue.extend([0] * (start + limit - len(dialogue)))
