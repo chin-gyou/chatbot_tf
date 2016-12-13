@@ -1,10 +1,10 @@
 import functools
+from tensorflow.python.ops import rnn_cell
 import tensorflow as tf
-from tensorflow.python.ops import rnn_cell, rnn
 
 
 # force every function to execute only once
-def define_scope(function):
+def exe_once(function):
     attribute = '_cache_' + function.__name__
 
     @property
@@ -33,156 +33,102 @@ def init_final(function):
 
 class base_enc_dec:
     """
-    vocab_size should contain an additional 0 class for padding
-    data: sequence data, num_sentences*batch_size*max_length*feature_size
-    labels: vocab index labels, num_sentences*batch_size*max_length, padding labels are 0s
-    length: length of every sequence, num_sequence*batch_size
-    h_size: hidden layer size of word-level RNN
-    e_size: embedding vector size for one word
-    embedding: initialising embedding matrix, vocab_size*e_size
-    decoded: number of decoded senquences, by default only decode the last sequence
-    bn: whether batch normalisation is used for context concatenation
-    base_rnn: whether put the ending state of a sequence as the starting state of the next one, defautl not
+    labels: vocab index labels, max_length*batch_size, padding labels are 0s, 2 is eot sign
+    length: Number of token of each dialogue batch_size
+    embedding: vocab_size*embed_size
+    """
+    @init_final
+    def __init__(self, labels, length, h_size, vocab_size, embedding, batch_size, learning_rate, mode):
+        self.__dict__.update(locals())
+        with tf.variable_scope('encode'):
+            self.encodernet = rnn_cell.GRUCell(h_size)
+            # embedding matrix
+            self.embedding_W = tf.get_variable('Embedding_W', initializer=embedding)
+            self.embedding_b = tf.get_variable('Embedding_b', initializer=tf.zeros([300]))
+        with tf.variable_scope('decode'):
+            self.decodernet = rnn_cell.GRUCell(h_size)
+            self.output_W = tf.get_variable('Output_W', initializer=tf.random_normal([h_size, vocab_size]))
+            self.output_b = tf.get_variable('Output_b', initializer=tf.zeros([vocab_size]))
+
+    """
+    word-level rnn step
+    takes the previous state and new input, output the new hidden state
+    If meeting 0 or 2, output initializing state
+    prev_h: batch_size*h_size
+    input: batch_size*embed_size
     """
 
-    @init_final
-    def __init__(self, data, labels, length, h_size, e_size, batch_size, num_seq, vocab_size, embedding, learning_rate,
-                 decoded=1, mode=0, bn=0, base_rnn=0, bi=0):
-        self.__dict__.update(locals())
-        self.W = tf.Variable(self.embedding, name='Embedding_W')
-        self.b = tf.Variable(tf.zeros([self.e_size]), dtype=tf.float32, name='Embedding_b')
-
+    def word_level_rnn(self, prev_h, input_embedding, mask):
         with tf.variable_scope('encode'):
-            self.encodernet = rnn_cell.GRUCell(self.h_size)
-            if bi:
-                self.encoderbw = rnn_cell.GRUCell(self.h_size)
+            _, h_new = self.encodernet(input_embedding, prev_h)
+            h_masked = h_new * mask  # zero state when meeting 0 or 2
+            return h_masked
+
+    """
+    decode-level rnn step
+    takes the previous state and new input, output the new hidden state
+    If meeting 0 or 2, output initializing state
+    prev_h: batch_size*h_size
+    input: batch_size*h_size
+    """
+
+    def decode_level_rnn(self, prev_h, input_h, mask):
         with tf.variable_scope('decode'):
-            self.decodernet = rnn_cell.GRUCell(self.h_size)
-            # mapping to vocab probability
-            self.W2 = tf.Variable(tf.zeros([self.decodernet.output_size, self.vocab_size]), dtype=tf.float32,
-                                  name='Output_W')
-            self.b2 = tf.Variable(tf.zeros([self.vocab_size]), dtype=tf.float32, name='Output_b')
+            _, h_new = self.decodernet(input_h, prev_h)
+            h_masked = h_new * mask  # zero state when meeting 0 or 2
+            return h_masked
 
-    # start word of decoded sequence
-    def start_word(self):
-        return tf.zeros([self.batch_size, 1, self.vocab_size])
+    """
+    prev_h[0]: word-level last state
+    prev_h[1]: decoder last state
+    basic encoder-decoder model
+    """
 
-    def embedded_word(self, v, shape):
-        reshaped = tf.reshape(v, [-1, self.vocab_size])
-        embedded = tf.matmul(reshaped, self.W) + self.b
-        return tf.reshape(embedded, shape)
+    def run(self, prev_h, input_labels):
+        mask = self.gen_mask(input_labels)
+        embedding = self.embed_labels(input_labels)
+        h = self.word_level_rnn(prev_h[0], embedding, mask)
+        d = self.decode_level_rnn(prev_h[1], h, mask)
+        return [h, d]
 
-    # input of last word for decoding sequences
-    def _sentence_input(self, i, max_len):
-        sentence_input = tf.slice(self.data[i + 1], [0, 0, 0], [self.batch_size, max_len - 1, self.vocab_size])
-        sentence_input = tf.concat(1, [self.start_word(), sentence_input])
-        shape = tf.shape(self.data[i + 1])
-        return self.embedded_word(sentence_input, [shape[0], shape[1], 300])
+    # turn labels into corresponding embeddings
+    def embed_labels(self, input_labels):
+        return tf.gather(self.embedding_W, input_labels) + self.embedding_b  #embedded inputs, batch_size*embed_size
 
-    # encode in word-level, return a list of encode_states for the first {num_seq-1} sequences
-    # encoder_state[i]: the encoder_state of the (i-1)-th sentence, shape=batch_size*h_state, the first one is zero initialisation
-    def encode_word(self):
-        if self.bi==0:
-            encoder_states = [tf.zeros([self.batch_size, self.h_size])]  # zero-initialisation for the first state
-        else:
-            encoder_states = [tf.zeros([self.batch_size, 2*self.h_size])]
-        # encode in word-level
-        with tf.variable_scope('encode') as enc:
-            initial_state = tf.zeros([self.batch_size, self.h_size])
-            for i in range(self.num_seq):
-                concatenated = tf.reshape(self.data[i], [-1, self.vocab_size])
-                embedded = tf.matmul(concatenated, self.W) + self.b
-                shape = tf.shape(self.data[i])
-                if self.bi==0:
-                    _, encoder_state = rnn.dynamic_rnn(self.encodernet, tf.reshape(embedded, [shape[0], shape[1], 300]),
-                                                   sequence_length=self.length[i], dtype=tf.float32,
-                                                   initial_state=initial_state)
-                else:#bidirectional GRU
-                    _, encoder_state = rnn.bidirectional_dynamic_rnn(self.encodernet, self.encoderbw, tf.reshape(embedded, [shape[0], shape[1], 300]),
-                                                   sequence_length=self.length[i], dtype=tf.float32)
-                    encoder_state = tf.concat(1,encoder_state)
-                enc.reuse_variables()
-                if self.base_rnn:
-                    initial_state = encoder_state
-                encoder_states.append(encoder_state)
-        return encoder_states
+    # generate mask for label, batch_size*1
+    def gen_mask(self, input_labels):
+        # mask all 0 and 2 as 0
+        mask = tf.cast(tf.logical_and(input_labels > 0, tf.not_equal(input_labels, 2)), tf.float32)
+        return tf.reshape(mask, [self.batch_size, 1])
 
-    def decode(self, e):
-        decoded = []
-        with tf.variable_scope('decode') as dec:
-            # decode, starts from the context state before the first decoded sequence
-            for i in range(self.num_seq - self.decoded - 1, self.num_seq - 1):
-                if self.mode < 3:
-                    max_len = tf.shape(self.data[i + 1])[1]
-                    output, _ = rnn.dynamic_rnn(self.decodernet, self._sentence_input(i, max_len),
-                                                sequence_length=self.length[i + 1], dtype=tf.float32,
-                                                initial_state=e[i + 1])
-                    dec.reuse_variables()
-                    # output: batch_size*max_length*h_size
-                    decoded.append(tf.matmul(tf.reshape(output, [-1, self.decodernet.output_size]), self.W2) + self.b2)
-        return decoded
+    # scan step, return output hidden state of the output layer
+    # h_d states after running, max_len*batch_size*h_size
+    def scan_step(self):
+        init_encode = tf.zeros([self.batch_size, self.h_size])
+        init_decoder = tf.zeros([self.batch_size, self.h_size])
+        _, h_d = tf.scan(self.run, self.labels, initializer=[init_encode, init_decoder])
+        return h_d
 
-    # prediction runs the forward computation
-    # the output should be of size {decoded*batch_size*max_length}*vocab_size
-    @define_scope
+    # return output layer
+    @exe_once
     def prediction(self):
-        encoder_states = base_enc_dec.encode_word(self)
-        output = self.decode(encoder_states)
+        h_d = self.scan_step()
+        predicted = tf.reshape(h_d[:-1], [-1, self.h_size])  # exclude the last prediction
+        output = tf.matmul(predicted, self.output_W) + self.output_b  #((max_len-1)*batch_size)*vocab_size
         return output
 
-    @define_scope
-    # loss when decoding only the last sequence, already deprecated
-    def __cost_last(self, logits_flat):
-        y_flat = tf.reshape(self.labels[-1], [-1])
-        losses = tf.nn.sparse_softmax_cross_entropy_with_logits(logits_flat, y_flat)
-        # Mask the losses
-        mask = tf.sign(tf.to_float(y_flat))
-        masked_losses = mask * losses
-        # Bring back to [B, T] shape
-        masked_losses = tf.reshape(masked_losses, tf.shape(self.labels[-1]))
-
-        # Calculate mean loss
-        mean_loss_by_example = tf.reduce_sum(masked_losses, reduction_indices=1) / self.length[-1]
-        mean_loss = tf.reduce_mean(mean_loss_by_example)
-        return mean_loss
-
-    # compute the mean cross entropy for the last but i sequence
-    def mean_cross_entropy(self, y_flat, losses, i):
-        # Mask the losses
-        mask = tf.sign(tf.to_float(y_flat))
-        masked_losses = mask * losses
-        # Bring back to [batch, max_length] shape
-        masked_losses = tf.reshape(masked_losses, tf.shape(self.labels[-i]))
-
-        # Calculate mean loss
-        mean_loss_by_example = tf.reduce_sum(masked_losses, reduction_indices=1) / tf.to_float(
-            self.length[-i])
-        mean_loss = tf.reduce_mean(mean_loss_by_example)
-        return mean_loss
-
-    # cost for training
-    # cost computes the loss when decoding the specified {decoded} sequences
-    # returned loss is the mean loss for every decoded sequence
-    @define_scope
+    @exe_once
     def cost(self):
-        total_loss = 0
-        for i in range(1, self.decoded + 1):
-            y_flat = tf.reshape(self.labels[-i], [-1])
-            losses = tf.nn.sparse_softmax_cross_entropy_with_logits(self.prediction[-i], y_flat)
-            total_loss += self.mean_cross_entropy(y_flat, losses, i)
-        return total_loss / self.decoded
+        y_flat = tf.reshape(self.labels[1:], [-1])  # exclude the first label
+        loss = tf.nn.sparse_softmax_cross_entropy_with_logits(self.prediction,y_flat)
+        # Mask the losses
+        mask = tf.sign(tf.to_float(y_flat))
+        masked_losses = tf.reshape(mask * loss, tf.shape(self.labels[1:]))
+        # normalized loss per example
+        mean_loss_by_example = tf.reduce_sum(masked_losses, reduction_indices=0) / tf.to_float(self.length)
+        return tf.reduce_mean(mean_loss_by_example)  # average loss of the batch
 
-    # percentage of predicted word in the top-k list
-    # averaged for {decoded} sequences
-    def top_k_per(self, k):
-        total_loss = 0
-        for i in range(1, self.decoded + 1):
-            y_flat = tf.reshape(self.labels[-i], [-1])
-            losses = tf.cast(tf.nn.in_top_k(self.prediction[-i], y_flat, k), tf.float32)
-            total_loss += self.mean_cross_entropy(y_flat, losses, i)
-        return total_loss / self.decoded
-
-    @define_scope
+    @exe_once
     def optimise(self):
         optim = tf.train.AdamOptimizer(self.learning_rate)
         global_step = tf.Variable(0, name='global_step', trainable=False)
