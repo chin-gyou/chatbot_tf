@@ -40,7 +40,7 @@ class base_enc_dec:
     @init_final
     def __init__(self, labels, length, h_size, vocab_size, embedding, batch_size, learning_rate, mode):
         self.__dict__.update(locals())
-        self.rolled_label = tf.concat(0, [tf.zeros([1, batch_size], dtype=tf.int32), labels[:-1]])
+        self.rolled_label = tf.concat(0, [tf.zeros([1, batch_size], dtype=tf.int64), labels[:-1]])
         with tf.variable_scope('encode'):
             self.encodernet = rnn_cell.GRUCell(h_size)
             # embedding matrix

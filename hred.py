@@ -23,16 +23,11 @@ class hred_enc_dec(base_enc_dec):
             h_masked = h_new * (1 - mask) + prev_h * mask  # update when meeting 0 or 2
             return h_masked
 
-    # return the context input
-    # h_s is the hidden state after the hier level
-    def context_input(self, h_s):
-        return h_s
-
     """
     prev_h[0]: word-level last state
     prev_h[1]: hier last state
-    prev_h[1]: decoder last state
-    basic encoder-decoder model
+    prev_h[2]: decoder last state
+    hier encoder-decoder model
     """
 
     def run(self, prev_h, input_labels):
@@ -42,7 +37,7 @@ class hred_enc_dec(base_enc_dec):
         h = self.word_level_rnn(prev_h[0], embedding, rolled_mask)
         h_s = self.hier_level_rnn(prev_h[1], h, mask)
         # concate embedding and h_s for decoding
-        d = self.decode_level_rnn(prev_h[2], tf.concat(1, [self.context_input(h_s), embedding]), rolled_mask)
+        d = self.decode_level_rnn(prev_h[2], tf.concat(1, [h_s, embedding]), rolled_mask)
         return [h, h_s, d]
 
     # scan step, return output hidden state of the output layer
