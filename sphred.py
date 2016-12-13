@@ -30,8 +30,7 @@ class sphred_enc_dec(hred_enc_dec):
     # return the context input
     # h_s is the hidden state after the hier level
     def context_input(self, h_s):
-        state_mask = self.num_seq % 2  # even:0, odd: 1
-        return h_s[0] * (1 - state_mask) + h_s[1] * state_mask  # even: h_s[0], odd: h_s[1]
+        return tf.concat(1, h_s)
 
     # scan step, return output hidden state of the output layer
     # h_d states after running, max_len*batch_size*h_size
