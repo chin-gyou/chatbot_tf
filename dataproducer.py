@@ -17,10 +17,10 @@ class data_producer:
 
     # label: vocabulary index list, len
     # convert one-line dialogue into a tf.SequenceExample
-    def __make_example(self, label):
+    def __make_example(self, label, length):
         ex = tf.train.SequenceExample()
         # one sequence
-        ex.context.feature["len"].int64_list.value.append(len(label))
+        ex.context.feature["len"].int64_list.value.append(length)
         for w in label:
             ex.feature_lists.feature_list['seq'].feature.add().int64_list.value.append(w + 1)  # prevent 0 for padding
         return ex
@@ -35,9 +35,11 @@ class data_producer:
         exs = []
         start = 0
         while ((len(dialogue) - 1) > start):
+            length = 80
             if start + limit > len(dialogue):  # padding 0
+                length = len(dialogue) - start
                 dialogue.extend([0] * (start + limit - len(dialogue)))
-            ex = self.__make_example(dialogue[start:start + limit])
+            ex = self.__make_example(dialogue[start:start + limit], length)
             start += (limit - 1)
             exs.append(ex)
         return exs
