@@ -12,7 +12,7 @@ class hred_enc_dec(base_enc_dec):
     """
     hier-level rnn step
     takes the previous state and new input, output the new hidden state
-    If meeting 0 or 2, update state, else stay unchange
+    If meeting 2, update state, else stay unchange
     prev_h: batch_size*c_size
     input: batch_size*h_size
     """
@@ -20,7 +20,7 @@ class hred_enc_dec(base_enc_dec):
     def hier_level_rnn(self, prev_h, input_vec, mask):
         with tf.variable_scope('hier'):
             _, h_new = self.hiernet(input_vec, prev_h)
-            h_masked = h_new * (1 - mask) + prev_h * mask  # update when meeting 0 or 2
+            h_masked = h_new * (1 - mask) + prev_h * mask  # update when meeting 2
             return h_masked
 
     """

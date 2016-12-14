@@ -20,7 +20,7 @@ class sphred_enc_dec(hred_enc_dec):
             state_mask = num_seq % 2  # even:0, odd: 1
             prev_state = prev_h[0] * (1 - state_mask) + prev_h[1] * state_mask  # even: prev[0], odd: prev[1]
             _, h_new = self.hiernet(input_vec, prev_state)
-            h_masked = h_new * (1 - mask) + prev_state * mask  # update when meeting 0 or 2
+            h_masked = h_new * (1 - mask) + prev_state * mask  # update when meeting 2
 
             prev_h[0] = h_masked * (1 - state_mask) + prev_h[0] * state_mask  # update when num_seq is even
             prev_h[1] = h_masked * state_mask + prev_h[1] * (1 - state_mask)  # update when num_seq is odd

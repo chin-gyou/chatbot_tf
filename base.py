@@ -33,7 +33,7 @@ def init_final(function):
 
 class base_enc_dec:
     """
-    labels: vocab index labels, max_length*batch_size, padding labels are 0s, 2 is eot sign
+    labels: vocab index labels, max_length*batch_size, padding labels are 0s, 2 is eot sign, 18576 is eou sign
     length: Number of token of each dialogue batch_size
     embedding: vocab_size*embed_size
     """
@@ -54,7 +54,7 @@ class base_enc_dec:
     """
     word-level rnn step
     takes the previous state and new input, output the new hidden state
-    If meeting 0 or 2, output initializing state
+    If meeting 2, output initializing state
     prev_h: batch_size*h_size
     input: batch_size*embed_size
     """
@@ -68,7 +68,7 @@ class base_enc_dec:
     """
     decode-level rnn step
     takes the previous state and new input, output the new hidden state
-    If meeting 0 or 2, output initializing state
+    If meeting 2, output initializing state
     prev_h: batch_size*h_size
     input: batch_size*h_size
     """
@@ -99,7 +99,7 @@ class base_enc_dec:
     # generate mask for label, batch_size*1
     def gen_mask(self, input_labels):
         # mask all 0 and 2 as 0
-        mask = tf.cast(tf.logical_and(input_labels > 0, tf.not_equal(input_labels, 2)), tf.float32)
+        mask = tf.cast(tf.not_equal(input_labels, 2), tf.float32)
         return tf.reshape(mask, [self.batch_size, 1])
 
     # scan step, return output hidden state of the output layer
