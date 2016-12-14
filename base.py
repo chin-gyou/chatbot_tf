@@ -40,7 +40,8 @@ class base_enc_dec:
     @init_final
     def __init__(self, labels, length, h_size, vocab_size, embedding, batch_size, learning_rate, mode):
         self.__dict__.update(locals())
-        self.rolled_label = tf.concat(0, [tf.zeros([1, batch_size], dtype=tf.int64), labels[:-1]])
+        self.labels = tf.concat(0, [tf.zeros([1, batch_size], dtype=tf.int64), labels])  # pad zero at the first place
+        self.rolled_label = tf.concat(0, [tf.zeros([1, batch_size], dtype=tf.int64), self.labels[:-1]])
         with tf.variable_scope('encode'):
             self.encodernet = rnn_cell.GRUCell(h_size)
             # embedding matrix
@@ -99,7 +100,7 @@ class base_enc_dec:
     # generate mask for label, batch_size*1
     def gen_mask(self, input_labels):
         # mask all 0 and 2 as 0
-        mask = tf.cast(tf.not_equal(input_labels, 2), tf.float32)
+        mask = tf.cast(tf.logical_and(input_labels > 0, tf.not_equal(input_labels, 2)), tf.float32)
         return tf.reshape(mask, [self.batch_size, 1])
 
     # scan step, return output hidden state of the output layer
@@ -115,12 +116,12 @@ class base_enc_dec:
     def prediction(self):
         h_d = self.scan_step()
         predicted = tf.reshape(h_d[:-1], [-1, self.h_size])  # exclude the last prediction
-        output = tf.matmul(predicted, self.output_W) + self.output_b  #((max_len-1)*batch_size)*vocab_size
+        output = tf.matmul(predicted, self.output_W) + self.output_b  #(max_len*batch_size)*vocab_size
         return output
 
     @exe_once
     def cost(self):
-        y_flat = tf.reshape(self.labels[1:], [-1])  # exclude the first label
+        y_flat = tf.reshape(self.labels[1:], [-1])  # exclude the first padded label
         loss = tf.nn.sparse_softmax_cross_entropy_with_logits(self.prediction,y_flat)
         # Mask the losses
         mask = tf.sign(tf.to_float(y_flat))
