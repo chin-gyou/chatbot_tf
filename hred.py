@@ -1,12 +1,14 @@
 from base import *
 
 
-class hred_enc_dec(base_enc_dec):
+class hred(base_enc_dec):
     @init_final
     def __init__(self, labels, length, h_size, c_size, vocab_size, embedding, batch_size, learning_rate, mode):
         self.c_size = c_size
         with tf.variable_scope('hier'):
             self.hiernet = rnn_cell.GRUCell(c_size)
+            self.init_W = tf.get_variable('Init_W', initializer=tf.random_normal([c_size, h_size]))
+            self.init_b = tf.get_variable('Init_b', initializer=tf.zeros([h_size]))
         base_enc_dec.__init__(self, labels, length, h_size, vocab_size, embedding, batch_size, learning_rate, mode)
 
     """
@@ -24,6 +26,20 @@ class hred_enc_dec(base_enc_dec):
             return h_masked
 
     """
+    decode-level rnn step
+    takes the previous state and new input, output the new hidden state
+    If meeting 2, use initializing state learned from context
+    prev_h: batch_size*c_size
+    input: batch_size*(c_size+embed_size)
+    """
+    def decode_level_rnn(self, prev_h, input_h, mask):
+        with tf.variable_scope('decode'):
+            prev_h = prev_h * mask + tf.tanh(tf.matmul(input_h[:,:self.c_size],self.init_W)+self.init_b)*(1-mask) # learn initial state from context
+            _, h_new = self.decodernet(input_h, prev_h)
+            return h_new
+
+
+    """
     prev_h[0]: word-level last state
     prev_h[1]: hier last state
     prev_h[2]: decoder last state
@@ -36,8 +52,9 @@ class hred_enc_dec(base_enc_dec):
         embedding = self.embed_labels(input_labels[0])
         h = self.word_level_rnn(prev_h[0], embedding, rolled_mask)
         h_s = self.hier_level_rnn(prev_h[1], h, mask)
+        embedding*=mask#mark first embedding as 0
         # concate embedding and h_s for decoding
-        d = self.decode_level_rnn(prev_h[2], tf.concat(1, [h_s, embedding]), rolled_mask)
+        d = self.decode_level_rnn(prev_h[2], tf.concat(1, [h_s, embedding]), mask)
         return [h, h_s, d]
 
     # scan step, return output hidden state of the output layer

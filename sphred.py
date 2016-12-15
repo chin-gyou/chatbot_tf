@@ -1,10 +1,11 @@
 from hred import *
 
-
-class sphred_enc_dec(hred_enc_dec):
+class sphred(hred):
     @init_final
     def __init__(self, labels, length, h_size, c_size, vocab_size, embedding, batch_size, learning_rate, mode):
-        hred_enc_dec.__init__(self, labels, length, h_size, c_size, vocab_size, embedding, batch_size, learning_rate,
+        with tf.variable_scope('hier'):
+            self.init_W = tf.get_variable('Init_W', initializer=tf.random_normal([2*c_size, h_size]))
+        hred.__init__(self, labels, length, h_size, c_size, vocab_size, embedding, batch_size, learning_rate,
                               mode)
 
     """
@@ -27,6 +28,20 @@ class sphred_enc_dec(hred_enc_dec):
             return prev_h, num_seq + 1 - mask
 
     """
+    decode-level rnn step
+    takes the previous state and new input, output the new hidden state
+    If meeting 2, use initializing state learned from context
+    prev_h: batch_size*2*c_size
+    input: batch_size*(2*c_size+embed_size)
+    """
+
+    def decode_level_rnn(self, prev_h, input_h, mask):
+        with tf.variable_scope('decode'):
+            prev_h = prev_h * mask + tf.tanh(tf.matmul(input_h[:2*self.c_size], self.init_W) + self.init_b) * (1 - mask)  # learn initial state from context
+            _, h_new = self.decodernet(input_h, prev_h)
+            return h_new
+
+    """
     prev_h[0]: word-level last state
     prev_h[1]: hier last state
     prev_h[2]: decoder last state
@@ -40,8 +55,9 @@ class sphred_enc_dec(hred_enc_dec):
         embedding = self.embed_labels(input_labels[0])
         h = self.word_level_rnn(prev_h[0], embedding, rolled_mask)
         h_s, num_seq = self.hier_level_rnn(prev_h[1], h, mask, prev_h[3])
+        embedding *= mask  # mark first embedding as 0
         # concate embedding and h_s for decoding
-        d = self.decode_level_rnn(prev_h[2], tf.concat(1, [tf.concat(1, h_s[:2]), embedding]), rolled_mask)
+        d = self.decode_level_rnn(prev_h[2], tf.concat(1, [tf.concat(1, h_s[:2]), embedding]), mask)
         return [h, h_s, d, num_seq]
 
     # scan step, return output hidden state of the output layer

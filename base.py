@@ -67,30 +67,17 @@ class base_enc_dec:
             return h_new
 
     """
-    decode-level rnn step
-    takes the previous state and new input, output the new hidden state
-    If meeting 2, output initializing state
-    prev_h: batch_size*h_size
-    input: batch_size*h_size
-    """
-
-    def decode_level_rnn(self, prev_h, input_h, mask):
-        with tf.variable_scope('decode'):
-            prev_h = prev_h * mask  # mask the fist state as zero
-            _, h_new = self.decodernet(input_h, prev_h)
-            return h_new
-
-    """
     prev_h[0]: word-level last state
     prev_h[1]: decoder last state
     basic encoder-decoder model
     """
 
     def run(self, prev_h, input_labels):
+        mask = self.gen_mask(input_labels[0])
         rolled_mask = self.gen_mask(input_labels[1])
         embedding = self.embed_labels(input_labels[0])
         h = self.word_level_rnn(prev_h[0], embedding, rolled_mask)
-        d = self.decode_level_rnn(prev_h[1], h, rolled_mask)
+        d = self.decode_level_rnn(prev_h[1], h, mask)
         return [h, d]
 
     # turn labels into corresponding embeddings
