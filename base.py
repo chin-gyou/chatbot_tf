@@ -87,7 +87,7 @@ class base_enc_dec:
     # generate mask for label, batch_size*1
     def gen_mask(self, input_labels):
         # mask all 0 and 2 as 0
-        mask = tf.cast(tf.logical_and(input_labels > 0, tf.not_equal(input_labels, 2)), tf.float32)
+        mask = tf.cast(tf.logical_and(input_labels > 0, tf.not_equal(input_labels, 18576)), tf.float32)
         return tf.reshape(mask, [self.batch_size, 1])
 
     # scan step, return output hidden state of the output layer

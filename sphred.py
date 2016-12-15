@@ -3,10 +3,12 @@ from hred import *
 class sphred(hred):
     @init_final
     def __init__(self, labels, length, h_size, c_size, vocab_size, embedding, batch_size, learning_rate, mode):
-        with tf.variable_scope('hier'):
-            self.init_W = tf.get_variable('Init_W', initializer=tf.random_normal([2*c_size, h_size]))
         hred.__init__(self, labels, length, h_size, c_size, vocab_size, embedding, batch_size, learning_rate,
                               mode)
+
+    @property
+    def context_len(self):
+        return 2 * self.c_size
 
     """
     sphier-level rnn step
@@ -26,20 +28,6 @@ class sphred(hred):
             prev_h[0] = h_masked * (1 - state_mask) + prev_h[0] * state_mask  # update when num_seq is even
             prev_h[1] = h_masked * state_mask + prev_h[1] * (1 - state_mask)  # update when num_seq is odd
             return prev_h, num_seq + 1 - mask
-
-    """
-    decode-level rnn step
-    takes the previous state and new input, output the new hidden state
-    If meeting 2, use initializing state learned from context
-    prev_h: batch_size*2*c_size
-    input: batch_size*(2*c_size+embed_size)
-    """
-
-    def decode_level_rnn(self, prev_h, input_h, mask):
-        with tf.variable_scope('decode'):
-            prev_h = prev_h * mask + tf.tanh(tf.matmul(input_h[:2*self.c_size], self.init_W) + self.init_b) * (1 - mask)  # learn initial state from context
-            _, h_new = self.decodernet(input_h, prev_h)
-            return h_new
 
     """
     prev_h[0]: word-level last state
