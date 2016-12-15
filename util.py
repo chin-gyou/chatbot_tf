@@ -45,7 +45,7 @@ def build_graph(options):
     dataproducer = data_producer(fileList, int(options.num_epochs))
     labels, length = dataproducer.batch_data(int(options.batch_size))
     # build model and graph
-    model = sphred_enc_dec(labels, length, int(options.h_size), int(options.c_size), vocab_size, word_vecs,
+    model = sphred(labels, length, int(options.h_size), int(options.c_size), vocab_size, word_vecs,
                            int(options.batch_size), float(options.lr), int(options.mode))
     # model = em_sp_enc_dec(data, labels, length, emotions, 2, int(options.h_size), e_size, int(options.c_size),
     #                      int(options.z_size), int(options.batch_size),
