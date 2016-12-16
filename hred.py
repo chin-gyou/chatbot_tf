@@ -17,6 +17,20 @@ class hred(base_enc_dec):
         return self.c_size
 
     """
+    word-level rnn step
+    takes the previous state and new input, output the new hidden state
+    If meeting 2, output initializing state
+    prev_h: batch_size*h_size
+    input: batch_size*embed_size
+    """
+
+    def word_level_rnn(self, prev_h, input_embedding, mask):
+        with tf.variable_scope('encode'):
+            prev_h = prev_h * mask  # mask the fist state as zero
+            _, h_new = self.encodernet(input_embedding, prev_h)
+            return h_new
+
+    """
     hier-level rnn step
     takes the previous state and new input, output the new hidden state
     If meeting 2, update state, else stay unchange
