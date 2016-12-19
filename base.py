@@ -121,21 +121,26 @@ class base_enc_dec:
     def decode_bs(self, h_d):
         h_e = h_d[0]
         h_d = h_d[1]
+        
         k = 0
         prev = tf.reshape(h_d[-1], [1, self.h_size])
         prev_e = tf.tile(h_e[-1], [self.beam_size, 1])
-        prev_d = tf.tile(h_d[-1], [self.beam_size, 1])
         while k < 15:
-            inp = self.beam_search(prev, k)
+            if k == 0:
+                prev_d = prev
+            inp = self.beam_search(prev_d, k)
             k += 1
+            print k
             with tf.variable_scope('encode') as enc:
-                _, e_new = self.encodernet(inp, prev_e)
-                e_new = tf.gather(e_new, self.beam_path[-1])
                 enc.reuse_variables()
+                _, e_new = self.encodernet(inp, prev_e)
+                e_new = tf.reshape(tf.gather(e_new, self.beam_path[-1]), [self.beam_size, self.h_size])
+            if k == 1:
+                prev_d = tf.tile(h_d[-1], [self.beam_size, 1])
             with tf.variable_scope('decode') as dec:
-                _, d_new = self.decodernet(e_new, prev_d)
-                d_new = tf.gather(d_new, self.beam_path[-1])
                 dec.reuse_variables()
+                _, d_new = self.decodernet(e_new, prev_d)
+                d_new = tf.reshape(tf.gather(d_new, self.beam_path[-1]), [self.beam_size, self.h_size])
             prev_e = e_new
             prev_d = d_new
         decoded =  tf.reshape(self.output_beam_symbols[-1], [self.beam_size, -1])
