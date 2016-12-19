@@ -3,7 +3,7 @@ from base import *
 
 class hred(base_enc_dec):
     @init_final
-    def __init__(self, labels, length, h_size, c_size, vocab_size, embedding, batch_size, learning_rate, mode):
+    def __init__(self, labels, length, h_size, c_size, vocab_size, embedding, batch_size, learning_rate, mode,beam_size = 5):
         self.c_size = c_size
         with tf.variable_scope('hier'):
             self.hiernet = rnn_cell.GRUCell(c_size)
@@ -83,6 +83,30 @@ class hred(base_enc_dec):
         init_encode = tf.zeros([self.batch_size, self.h_size])
         init_hier = tf.zeros([self.batch_size, self.c_size])
         init_decoder = tf.zeros([self.batch_size, self.h_size])
-        _, _, h_d = tf.scan(self.run, [self.labels, self.rolled_label],
+        _, h_s, h_d = tf.scan(self.run, [self.labels, self.rolled_label],
                             initializer=[init_encode, init_hier, init_decoder])
-        return h_d
+        return [h_s,h_d]
+
+    def decode_bs(self, h_d):
+        last_h = h_d[0][-1]
+        last_d = h_d[1][-1]
+        print 'lastd', last_d
+        k = 0
+        prev = tf.reshape(last_d, [1, self.h_size])
+        prev_h = tf.tile(last_h, [self.beam_size, 1])
+        prev_d = tf.tile(last_d, [self.beam_size, 1])
+        print prev_d
+        while k < 15:
+            if k == 0:
+                prev_d = prev    
+            inp = self.beam_search(prev_d, k)
+            prev_d = tf.reshape(tf.gather(prev_d, self.beam_path[-1]), [self.beam_size, self.h_size])
+            k += 1
+            with tf.variable_scope('decode') as dec:
+                dec.reuse_variables()
+                _, d_new = self.decodernet(tf.concat(1, [prev_h, inp]), prev_d)
+                prev_d = d_new
+        decoded =  tf.reshape(self.output_beam_symbols[-1], [self.beam_size, -1])
+        #decoded =  tf.reshape(self.beam_symbols, [self.beam_size, -1])
+        return decoded 
+ 
