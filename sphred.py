@@ -61,8 +61,10 @@ class sphred(hred):
 
     def decode_bs(self, h_d):
         last_h = h_d[0][-1]
+        print "xx", last_h[0]
         last_d = h_d[1][-1]
-        last_h = tf.concat(1, last_h[:2])
+        last_h = tf.concat(1, [last_h[0],last_h[1]])
+        print last_h
         k = 0
         prev = tf.reshape(last_d, [1, self.h_size])
         prev_h = tf.tile(last_h, [self.beam_size, 1])
