@@ -56,7 +56,8 @@ def build_graph(options):
 
 def train(options):
     model = build_graph(options)
-    variable_summaries(model.cost, 'loss')
+    if options.mode != 2:
+        variable_summaries(model.cost, 'loss')
     merged = tf.merge_all_summaries()
     saver = tf.train.Saver(keep_checkpoint_every_n_hours=2)
 
@@ -75,6 +76,9 @@ def train(options):
         sess.run(init_op)
         print('Start Training...')
     try:
+        if options.mode == 2:
+            chat(options,sess,coord, options.input_path, model, options.batch_size)
+            exit()
         saver.save(sess, options.save_path + 'checkpoint_start')
         while not coord.should_stop():
             batch_loss, training, summary = sess.run([model.cost, model.optimise, merged])
@@ -127,3 +131,37 @@ def evaluate(sess, coord, filedir, model, batch_size):
         coord.request_stop()
         coord.join(threads)
         return total_loss / step
+
+def chat(options,sess, coord, filedir, model, batch_size):
+    with open(options.wvec_dict,'rb') as f:
+        dics=pickle.load(f)
+    # i+1, 0 stand for padding elements
+    word_index_dic = {w: int(i + 1) for w, i, _, _ in dics}
+    index_word_dic = {int(i + 1): w for w, i, _, _ in dics}
+    fileList = os.listdir(filedir)
+    r = []
+    if fileList == []:
+        print('\nNo input file found!')
+        sys.exit()
+    fileList = [os.path.join(filedir, item) for item in fileList]
+    dataproducer = data_producer(fileList, 1)
+    labels, length = dataproducer.batch_data(options.batch_size)
+    # build model and graph
+    model.labels, model.length = labels, length
+    step, total_loss = 0, 0
+    threads = tf.train.start_queue_runners(coord=coord, sess=sess)
+    try:
+        while not coord.should_stop():
+            dec = sess.run(model.prediction)
+            print dec[0]
+            seq = ' '.join([index_word_dic[i] for i in dec[0]])+'\n'
+            r.append(seq)
+    except tf.errors.OutOfRangeError:
+        print('Evaluating Complete...')
+    finally:
+        with open('r.txt','w') as f:
+            f.writelines(r)
+ 
+        coord.request_stop()
+        coord.join(threads)
+
