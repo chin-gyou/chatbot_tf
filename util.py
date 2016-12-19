@@ -25,7 +25,6 @@ def variable_summaries(var, name):
 
 def build_graph(options):
     # get input file list and word vectors
-    word_vecs, word_dict = 0, 0
     fileList = os.listdir(options.input_path)
     if fileList == []:
         print('\nNo input file found!')
@@ -33,8 +32,6 @@ def build_graph(options):
     else:
         try:
             print('Loading saved embeddings for tokens...')
-            # with open(options.wvec_dict, 'rb') as f:
-            #     word_dict = pickle.load(f)
             with open(options.wvec_mat, 'rb') as f:
                 word_vecs = pickle.load(f)
         except IOError:
@@ -56,8 +53,7 @@ def build_graph(options):
 
 def train(options):
     model = build_graph(options)
-    if options.mode != 2:
-        variable_summaries(model.cost, 'loss')
+    variable_summaries(model.cost, 'loss')
     merged = tf.merge_all_summaries()
     saver = tf.train.Saver(keep_checkpoint_every_n_hours=2)
 
@@ -76,9 +72,6 @@ def train(options):
         sess.run(init_op)
         print('Start Training...')
     try:
-        if options.mode == 2:
-            chat(options,sess,coord, options.input_path, model, options.batch_size)
-            exit()
         saver.save(sess, options.save_path + 'checkpoint_start')
         while not coord.should_stop():
             batch_loss, training, summary = sess.run([model.cost, model.optimise, merged])
@@ -132,36 +125,37 @@ def evaluate(sess, coord, filedir, model, batch_size):
         coord.join(threads)
         return total_loss / step
 
-def chat(options,sess, coord, filedir, model, batch_size):
+
+def chat(options):
+    fileList = os.listdir(options.input_path)
+    fileList = [os.path.join(options.input_path, item) for item in fileList]
     with open(options.wvec_dict,'rb') as f:
         dics=pickle.load(f)
     # i+1, 0 stand for padding elements
     word_index_dic = {w: int(i + 1) for w, i, _, _ in dics}
     index_word_dic = {int(i + 1): w for w, i, _, _ in dics}
-    fileList = os.listdir(filedir)
     r = []
-    if fileList == []:
-        print('\nNo input file found!')
-        sys.exit()
-    fileList = [os.path.join(filedir, item) for item in fileList]
-    dataproducer = data_producer(fileList, 1)
-    labels, length = dataproducer.batch_data(options.batch_size)
     # build model and graph
-    model.labels, model.length = labels, length
-    step, total_loss = 0, 0
-    threads = tf.train.start_queue_runners(coord=coord, sess=sess)
+    labels = tf.placeholder(tf.int64, [None, 1])
+    length = tf.placeholder(tf.int64, [1])
+    model = sphred(labels, length, int(options.h_size), int(options.c_size), 20001, tf.zeros([20001, 300]),
+                   int(options.batch_size), float(options.lr), int(options.mode))
+    config = tf.ConfigProto(allow_soft_placement=False)
+    sess = tf.Session(config=config)
+    restore_trainable(sess, options.load_chkpt)
     try:
-        while not coord.should_stop():
-            dec = sess.run(model.prediction)
-            print dec[0]
-            seq = ' '.join([index_word_dic[i] for i in dec[0]])+'\n'
-            r.append(seq)
-    except tf.errors.OutOfRangeError:
-        print('Evaluating Complete...')
+        for fi in fileList:
+            with open(fi, 'r') as f:
+                lines = f.readlines()
+                # one test
+                for line in lines:
+                    labels_data = line.split()
+                    length_data = [len(labels_data)]
+                    labels_data = [[word_index_dic.get(i, 1)] for i in labels_data]
+                    dec = sess.run(model.prediction, feed_dict={labels: labels_data, length: length_data})
+                    seq = ' '.join([index_word_dic[i] for i in dec[0]]) + '\n'
+                    print(seq)
+                    r.append(seq)
     finally:
         with open('r.txt','w') as f:
             f.writelines(r)
- 
-        coord.request_stop()
-        coord.join(threads)
-

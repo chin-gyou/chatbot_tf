@@ -42,7 +42,7 @@ class base_enc_dec:
         self.__dict__.update(locals())
         self.labels = tf.concat(0, [tf.zeros([1, batch_size], dtype=tf.int64), labels])  # pad zero at the first place
         self.rolled_label = tf.concat(0, [tf.zeros([1, batch_size], dtype=tf.int64), self.labels[:-1]])
-      	self.log_beam_probs, self.beam_path,self.output_beam_symbols, self.beam_symbols = [], [], [],[]
+        self.log_beam_probs, self.beam_path, self.output_beam_symbols, self.beam_symbols = [], [], [], []
         with tf.variable_scope('encode'):
             self.encodernet = rnn_cell.GRUCell(h_size)
             # embedding matrix
@@ -160,7 +160,6 @@ class base_enc_dec:
 
         self.beam_path.append(beam_parent)
         symbols_live = symbols
-        print 'dd', self.output_beam_symbols
         if k > 0:
             symbols_history = tf.gather(self.output_beam_symbols[-1], beam_parent)
             symbols_live = tf.concat(1,[tf.reshape(symbols_history,[-1,k]), tf.reshape(symbols, [-1, 1])])

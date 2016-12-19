@@ -10,7 +10,8 @@ class hred(base_enc_dec):
             print(self.context_len)
             self.init_W = tf.get_variable('Init_W', initializer=tf.random_normal([self.context_len, h_size]))
             self.init_b = tf.get_variable('Init_b', initializer=tf.zeros([h_size]))
-        base_enc_dec.__init__(self, labels, length, h_size, vocab_size, embedding, batch_size, learning_rate, mode)
+        base_enc_dec.__init__(self, labels, length, h_size, vocab_size, embedding, batch_size, learning_rate, mode,
+                              beam_size)
 
     @property
     def context_len(self):
@@ -90,12 +91,10 @@ class hred(base_enc_dec):
     def decode_bs(self, h_d):
         last_h = h_d[0][-1]
         last_d = h_d[1][-1]
-        print 'lastd', last_d
         k = 0
         prev = tf.reshape(last_d, [1, self.h_size])
         prev_h = tf.tile(last_h, [self.beam_size, 1])
         prev_d = tf.tile(last_d, [self.beam_size, 1])
-        print prev_d
         while k < 15:
             if k == 0:
                 prev_d = prev    

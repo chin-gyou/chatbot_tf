@@ -28,7 +28,7 @@ if __name__ == '__main__':
     parser.add_option("--load-chkpt", dest="load_chkpt", help="Path to checkpoint file. Required for mode:1",
                       default='')
     (options, _) = parser.parse_args()
-    #if int(options.mode) == 0:
-    train(options)
-    #else:
-    #    pass
+    if int(options.mode) == 0:
+        train(options)
+    elif int(options.mode) == 2:
+        chat(options)

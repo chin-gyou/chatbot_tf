@@ -45,7 +45,7 @@ class sphred(hred):
         h_s, num_seq = self.hier_level_rnn(prev_h[1], h, mask, prev_h[3])
         embedding *= mask  # mark first embedding as 0
         # concate embedding and h_s for decoding
-        d = self.decode_level_rnn(prev_h[2], tf.concat(1, [tf.concat(1, h_s[:2]), embedding]), mask)
+        d = self.decode_level_rnn(prev_h[2], tf.concat(1, [tf.concat(1, h_s), embedding]), mask)
         return [h, h_s, d, num_seq]
 
     # scan step, return output hidden state of the output layer
@@ -62,12 +62,11 @@ class sphred(hred):
     def decode_bs(self, h_d):
         last_h = h_d[0][-1]
         last_d = h_d[1][-1]
-        last_d = tf.concat(1, last_d[:2])
+        last_h = tf.concat(1, last_h[:2])
         k = 0
         prev = tf.reshape(last_d, [1, self.h_size])
         prev_h = tf.tile(last_h, [self.beam_size, 1])
         prev_d = tf.tile(last_d, [self.beam_size, 1])
-        print prev_d
         while k < 15:
             if k == 0:
                 prev_d = prev    
