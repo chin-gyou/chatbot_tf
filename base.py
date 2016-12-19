@@ -23,9 +23,9 @@ def init_final(function):
     def decorator(self, *args, **kwargs):
         function(self, *args, **kwargs)
         # In test mode, only build graph by prediction, no optimise part
-        if self.mode >= 1:
+        if int(self.mode) >= 1:
             self.prediction
-        elif self.mode ==0: # train mode, optimise
+        elif int(self.mode) ==0: # train mode, optimise
             self.optimise
 
     return decorator
@@ -38,10 +38,11 @@ class base_enc_dec:
     embedding: vocab_size*embed_size
     """
     @init_final
-    def __init__(self, labels, length, h_size, vocab_size, embedding, batch_size, learning_rate, mode):
+    def __init__(self, labels, length, h_size, vocab_size, embedding, batch_size, learning_rate, mode,beam_size=5):
         self.__dict__.update(locals())
         self.labels = tf.concat(0, [tf.zeros([1, batch_size], dtype=tf.int64), labels])  # pad zero at the first place
         self.rolled_label = tf.concat(0, [tf.zeros([1, batch_size], dtype=tf.int64), self.labels[:-1]])
+      	self.log_beam_probs, self.beam_path,self.output_beam_symbols, self.beam_symbols = [], [], [],[]
         with tf.variable_scope('encode'):
             self.encodernet = rnn_cell.GRUCell(h_size)
             # embedding matrix
@@ -104,16 +105,72 @@ class base_enc_dec:
         init_encode = tf.zeros([self.batch_size, self.h_size])
         init_decoder = tf.zeros([self.batch_size, self.h_size])
         _, h_d = tf.scan(self.run, [self.labels, self.rolled_label], initializer=[init_encode, init_decoder])
-        return h_d
+        return [_, h_d]
 
     # return output layer
     @exe_once
     def prediction(self):
         h_d = self.scan_step()
+        if self.mode == 2:
+            sequences = self.decode_bs(h_d)
+            return sequences
         predicted = tf.reshape(h_d[:-1], [-1, self.h_size])  # exclude the last prediction
         output = tf.matmul(predicted, self.output_W) + self.output_b  #(max_len*batch_size)*vocab_size
         return output
 
+    def decode_bs(self, h_d):
+        h_e = h_d[0]
+        h_d = h_d[1]
+        k = 0
+        prev = tf.reshape(h_d[-1], [1, self.h_size])
+        prev_e = tf.tile(h_e[-1], [self.beam_size, 1])
+        prev_d = tf.tile(h_d[-1], [self.beam_size, 1])
+        while k < 15:
+            inp = self.beam_search(prev, k)
+            k += 1
+            with tf.variable_scope('encode') as enc:
+                _, e_new = self.encodernet(inp, prev_e)
+                e_new = tf.gather(e_new, self.beam_path[-1])
+                enc.reuse_variables()
+            with tf.variable_scope('decode') as dec:
+                _, d_new = self.decodernet(e_new, prev_d)
+                d_new = tf.gather(d_new, self.beam_path[-1])
+                dec.reuse_variables()
+            prev_h = h_new
+            prev_d = d_new
+        decoded =  tf.reshape(self.output_beam_symbols[-1], [self.beam_size, -1])
+        return decoded 
+ 
+    def beam_search(self, prev, k):
+        probs = tf.log(tf.nn.softmax(
+                    tf.matmul(tf.reshape(prev, [-1, self.h_size]), self.output_W) + self.output_b))
+        minus_probs = [0 for i in range(self.vocab_size)]
+        minus_probs[1] = -1e20
+        probs = probs +  minus_probs
+        if k > 0:
+            probs = tf.reshape(probs + self.log_beam_probs[-1],
+                               [-1, self.beam_size * self.vocab_size])
+
+        best_probs, indices = tf.nn.top_k(probs, self.beam_size)
+        indices = tf.reshape(indices, [-1, 1])
+        best_probs = tf.reshape(best_probs, [-1, 1])
+
+        symbols = indices % self.vocab_size  # Which word in vocabulary.
+        beam_parent = indices // self.vocab_size  # Which hypothesis it came from.
+
+        self.beam_path.append(beam_parent)
+        symbols_live = symbols
+        print 'dd', self.output_beam_symbols
+        if k > 0:
+            symbols_history = tf.gather(self.output_beam_symbols[-1], beam_parent)
+            symbols_live = tf.concat(1,[tf.reshape(symbols_history,[-1,k]), tf.reshape(symbols, [-1, 1])])
+        self.output_beam_symbols.append(symbols_live)
+        self.beam_symbols.append(symbols)
+        self.log_beam_probs.append(best_probs)
+        embedded = self.embed_labels(symbols)
+        emb_prev = tf.reshape(embedded, [self.beam_size, 300])
+        return emb_prev
+ 
     @exe_once
     def cost(self):
         y_flat = tf.reshape(self.labels[1:], [-1])  # exclude the first padded label
