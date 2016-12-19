@@ -114,7 +114,7 @@ class base_enc_dec:
         if self.mode == 2:
             sequences = self.decode_bs(h_d)
             return sequences
-        predicted = tf.reshape(h_d[:-1], [-1, self.h_size])  # exclude the last prediction
+        predicted = tf.reshape(h_d[1][:-1], [-1, self.h_size])  # exclude the last prediction
         output = tf.matmul(predicted, self.output_W) + self.output_b  #(max_len*batch_size)*vocab_size
         return output
 
