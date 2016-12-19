@@ -136,7 +136,7 @@ class base_enc_dec:
                 _, d_new = self.decodernet(e_new, prev_d)
                 d_new = tf.gather(d_new, self.beam_path[-1])
                 dec.reuse_variables()
-            prev_h = h_new
+            prev_e = e_new
             prev_d = d_new
         decoded =  tf.reshape(self.output_beam_symbols[-1], [self.beam_size, -1])
         return decoded 
