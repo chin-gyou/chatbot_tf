@@ -130,7 +130,6 @@ class base_enc_dec:
                 prev_d = prev
             inp = self.beam_search(prev_d, k)
             k += 1
-            print k
             with tf.variable_scope('encode') as enc:
                 enc.reuse_variables()
                 _, e_new = self.encodernet(inp, prev_e)
