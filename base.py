@@ -2,6 +2,9 @@ import functools
 from tensorflow.python.ops import rnn_cell
 import tensorflow as tf
 
+# end token index
+EOU = 18576
+EOT = 2
 
 # force every function to execute only once
 def exe_once(function):
@@ -40,8 +43,9 @@ class base_enc_dec:
     @init_final
     def __init__(self, labels, length, h_size, vocab_size, embedding, batch_size, learning_rate, mode,beam_size=5):
         self.__dict__.update(locals())
-        self.labels = tf.concat(0, [tf.zeros([1, batch_size], dtype=tf.int64), labels])  # pad zero at the first place
-        self.rolled_label = tf.concat(0, [tf.zeros([1, batch_size], dtype=tf.int64), self.labels[:-1]])
+        self.labels = tf.concat(0,
+                                [EOU * tf.ones([1, batch_size], dtype=tf.int64), labels])  # pad EOU at the first place
+        self.rolled_label = tf.concat(0, [EOU * tf.ones([1, batch_size], dtype=tf.int64), self.labels[:-1]])
         self.log_beam_probs, self.beam_path, self.output_beam_symbols, self.beam_symbols = [], [], [], []
         with tf.variable_scope('encode'):
             self.encodernet = rnn_cell.GRUCell(h_size)
@@ -84,7 +88,7 @@ class base_enc_dec:
     """
 
     def run(self, prev_h, input_labels):
-        embedding = self.embed_labels(input_labels[0])
+        embedding = self.embed_labels(input_labels)
         h = self.word_level_rnn(prev_h[0], embedding)
         d = self.decode_level_rnn(prev_h[1], h)
         return [h, d]
@@ -94,9 +98,10 @@ class base_enc_dec:
         return tf.gather(self.embedding_W, input_labels) + self.embedding_b  #embedded inputs, batch_size*embed_size
 
     # generate mask for label, batch_size*1
-    def gen_mask(self, input_labels):
+    # value is masked as 0
+    def gen_mask(self, input_labels, value):
         # mask all 0 and 2 as 0
-        mask = tf.cast(tf.logical_and(input_labels > 0, tf.not_equal(input_labels, 18576)), tf.float32)
+        mask = tf.cast(tf.not_equal(input_labels, value), tf.float32)
         return tf.reshape(mask, [self.batch_size, 1])
 
     # scan step, return output hidden state of the output layer
@@ -104,7 +109,7 @@ class base_enc_dec:
     def scan_step(self):
         init_encode = tf.zeros([self.batch_size, self.h_size])
         init_decoder = tf.zeros([self.batch_size, self.h_size])
-        _, h_d = tf.scan(self.run, [self.labels, self.rolled_label], initializer=[init_encode, init_decoder])
+        _, h_d = tf.scan(self.run, self.labels, initializer=[init_encode, init_decoder])
         return [_, h_d]
 
     # return output layer

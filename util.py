@@ -1,16 +1,23 @@
 from dataproducer import *
+from vhred import *
 from sphred import *
 import os
 import pickle
 import sys
 
-# restore trainable variables from a checkpoint file
+
+# restore trainable variables from a checkpoint file, excluede some specific variables
 def restore_trainable(sess, chkpt):
-    variables_to_restore = {}
-    for v in tf.all_variables():
-        if v in tf.trainable_variables():
-            restore_name = v.op.name
-            variables_to_restore[restore_name] = v
+    trainable = {v.op.name: v for v in tf.trainable_variables()}
+    print('trainable:', trainable)
+    exclude = set()
+    # exclude={'hier/Init_W','hier/Init_b','decode/GRUCell/Candidate/Linear/Matrix','decode/GRUCell/Candidate/Linear/Bias','decode/GRUCell/Gates/Linear/Matrix','decode/GRUCell/Gates/Linear/Bias'}# excluded variables
+    trainable = {key: value for key, value in trainable.items() if key not in exclude}
+    reader = tf.train.NewCheckpointReader(chkpt)
+    var_to_shape_map = reader.get_variable_to_shape_map()
+    # only restore variables existed in the checkpoint file
+    variables_to_restore = {key: value for key, value in trainable.items() if key in var_to_shape_map}
+    print('to_restore:', variables_to_restore)
     saver = tf.train.Saver(variables_to_restore)
     saver.restore(sess, chkpt)
 
@@ -42,12 +49,10 @@ def build_graph(options):
     dataproducer = data_producer(fileList, int(options.num_epochs))
     labels, length = dataproducer.batch_data(int(options.batch_size))
     # build model and graph
-    model = hred(labels, length, int(options.h_size), int(options.c_size), vocab_size, word_vecs,
-                 int(options.batch_size), float(options.lr), int(options.mode))
-    # model = em_sp_enc_dec(data, labels, length, emotions, 2, int(options.h_size), e_size, int(options.c_size),
-    #                      int(options.z_size), int(options.batch_size),
-    #                      int(options.num_seq), vocab_size, word_vecs, float(options.lr), int(options.decoded),
-    #                      int(options.mode))
+    # model = vhred(labels, length, int(options.h_size), int(options.c_size), int(options.z_size),vocab_size, word_vecs,
+    #             int(options.batch_size), float(options.lr), int(options.mode))
+    model = sphred(labels, length, int(options.h_size), int(options.c_size), vocab_size, word_vecs,
+                   int(options.batch_size), float(options.lr), int(options.mode))
     return model
 
 
@@ -66,7 +71,9 @@ def train(options):
     # restore from a check point
     if options.load_chkpt:
         print('Loading saved variables from checkpoint file to graph')
-        saver.restore(sess, options.load_chkpt)
+        sess.run(init_op)
+        # saver.restore(sess, options.load_chkpt)
+        restore_trainable(sess, options.load_chkpt)
         print('Resume Training...')
     else:
         sess.run(init_op)

@@ -2,26 +2,26 @@ import tensorflow as tf
 
 # Fully-connected layer
 class Dense():
-
-    def __init__(self, scope="dense_layer", size=None, dropout=1.,
+    def __init__(self, scope="dense_layer", size=512, xsize=512, dropout=1.,
                  nonlinearity=tf.identity, name='dense'):
-        assert size, "Must specify layer size (num nodes)"
+        assert (size, xsize), "Must specify layer size (num nodes)"
         self.__dict__.update(locals())
+        with tf.name_scope(scope):
+            self.w, self.b = self.wbVars(xsize, size, name)
+            self.w = tf.nn.dropout(self.w, dropout)
 
     # x: N1...Nn*x_size
     # return: N1...Nn*self.size
-    def __call__(self, x, x_size):
+    # if reshape, return shape the same as x
+    def __call__(self, x, reshape=False):
         with tf.name_scope(self.scope):
-            while True:
-                try:  # reuse weights if already initialized
-                    reshaped=tf.reshape(x,[-1,x_size])
-                    result=self.nonlinearity(tf.matmul(reshaped, self.w) + self.b)
-                    dims = tf.slice(tf.shape(x), [0], [tf.rank(x) - 1])
-                    new_shape = tf.concat(0, [dims, [self.size]])
-                    return tf.reshape(result, new_shape)
-                except(AttributeError):
-                    self.w, self.b = self.wbVars(x_size, self.size, self.name)
-                    self.w = tf.nn.dropout(self.w, self.dropout)
+            reshaped = tf.reshape(x, [-1, self.xsize])
+            result = self.nonlinearity(tf.matmul(reshaped, self.w) + self.b)
+            if reshape:
+                dims = tf.slice(tf.shape(x), [0], [tf.rank(x) - 1])
+                new_shape = tf.concat(0, [dims, [self.size]])
+                return tf.reshape(result, new_shape)
+            return tf.reshape(result, [-1, self.size])
 
     # Helper to initialize weights and biases, via He's adaptation
     # of Xavier init for ReLUs: https://arxiv.org/abs/1502.01852

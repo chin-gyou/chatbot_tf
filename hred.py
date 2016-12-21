@@ -42,7 +42,7 @@ class hred(base_enc_dec):
     def hier_level_rnn(self, prev_h, input_vec, mask):
         with tf.variable_scope('hier'):
             _, h_new = self.hiernet(input_vec, prev_h)
-            h_masked = h_new * (1 - mask) + prev_h * mask  # update when meeting 2
+            h_masked = h_new * (1 - mask) + prev_h * mask  # update when meeting EOU
             return h_masked
 
     """
@@ -68,8 +68,8 @@ class hred(base_enc_dec):
     """
 
     def run(self, prev_h, input_labels):
-        mask = self.gen_mask(input_labels[0])
-        rolled_mask = self.gen_mask(input_labels[1])
+        mask = self.gen_mask(input_labels[0], EOU)
+        rolled_mask = self.gen_mask(input_labels[1], EOU)
         embedding = self.embed_labels(input_labels[0])
         h = self.word_level_rnn(prev_h[0], embedding, rolled_mask)
         h_s = self.hier_level_rnn(prev_h[1], h, mask)

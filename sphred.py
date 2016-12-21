@@ -18,16 +18,16 @@ class sphred(hred):
     input: batch_size*h_size
     """
 
-    def hier_level_rnn(self, prev_h, input_vec, mask, num_seq):
+    def hier_level_rnn(self, prev_h, input_vec, mask, eot_mask, num_seq):
         with tf.variable_scope('hier'):
             state_mask = num_seq % 2  # even:0, odd: 1
             prev_state = prev_h[0] * (1 - state_mask) + prev_h[1] * state_mask  # even: prev[0], odd: prev[1]
             _, h_new = self.hiernet(input_vec, prev_state)
-            h_masked = h_new * (1 - mask) + prev_state * mask  # update when meeting 2
+            h_masked = h_new * (1 - mask) + prev_state * mask  # update when meeting eou
 
             prev_h[0] = h_masked * (1 - state_mask) + prev_h[0] * state_mask  # update when num_seq is even
             prev_h[1] = h_masked * state_mask + prev_h[1] * (1 - state_mask)  # update when num_seq is odd
-            return prev_h, num_seq + 1 - mask
+            return prev_h, num_seq + 1 - eot_mask
 
     """
     prev_h[0]: word-level last state
@@ -38,14 +38,19 @@ class sphred(hred):
     """
 
     def run(self, prev_h, input_labels):
-        mask = self.gen_mask(input_labels[0])
-        rolled_mask = self.gen_mask(input_labels[1])
+        mask = self.gen_mask(input_labels[0], EOU)
+        rolled_mask = self.gen_mask(input_labels[1], EOU)
+        eot_mask = self.gen_mask(input_labels[0], EOT)
         embedding = self.embed_labels(input_labels[0])
         h = self.word_level_rnn(prev_h[0], embedding, rolled_mask)
-        h_s, num_seq = self.hier_level_rnn(prev_h[1], h, mask, prev_h[3])
-        embedding *= mask  # mark first embedding as 0
-        # concate embedding and h_s for decoding
-        d = self.decode_level_rnn(prev_h[2], tf.concat(1, [tf.concat(1, h_s), embedding]), mask)
+        h_s, num_seq = self.hier_level_rnn(prev_h[1], h, mask, eot_mask, prev_h[3])
+        embedding *= (mask * eot_mask)  # mark first embedding as 0 for eou and eot
+        # decide how to concat context
+        state_mask = num_seq % 2
+        h_own = h_s[0] * (1 - state_mask) + h_s[1] * state_mask  # context of current speaker
+        h_other = h_s[0] * state_mask + h_s[1] * (1 - state_mask)  # context of other speaker
+        # concate embedding and h_s for decoding, mask is set as 0 for either eou or eot
+        d = self.decode_level_rnn(prev_h[2], tf.concat(1, [tf.concat(1, [h_own, h_other]), embedding]), mask * eot_mask)
         return [h, h_s, d, num_seq]
 
     # scan step, return output hidden state of the output layer
