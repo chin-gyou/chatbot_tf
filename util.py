@@ -98,6 +98,8 @@ def train(options):
                 current_validation_loss = evaluate(sess, options.validation_dir, model, options.batch_size)
                 if current_validation_loss > pre_validation_loss:
                     break
+                saver.save(sess, options.save_path + 'checkpoint_' + str(train_step) + '_epoch_' + str(epoch))
+                print('@epoch:%d \t Model saved at: %s' % (epoch, options.save_path))
                 pre_validation_loss = current_validation_loss
                 epoch += 1
                 print('Validate END...\t Next Epoch: %d' % (epoch))
