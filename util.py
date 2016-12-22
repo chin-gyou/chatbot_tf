@@ -144,8 +144,8 @@ def evaluate(sess, filedir, model, batch_size):
             step += 1
             total_loss += batch_loss[0]
             if step % 100 == 0:
-                print('[size:%d]Mini-Batches run : %d\t\tLoss : %f\t\tMean Loss: %f' % (batch_size), step, batch_loss[0],
-                      total_loss / step)
+                print('[size:%d]Mini-Batches run : %d\t\tLoss : %f\t\tMean Loss: %f' % (batch_size, step, batch_loss[0],
+                      total_loss / step))
             if step == step_evaluate:
                 break
     except tf.errors.OutOfRangeError:
