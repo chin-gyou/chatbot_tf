@@ -6,6 +6,8 @@ if __name__ == '__main__':
     parser = OptionParser()
     parser.add_option("-i", "--input-path", dest="input_path", help="Path to data text files in TFRecord format",
                       default='./tfrecord')
+    parser.add_option("-v", "--validation-dir", dest="validation_dir", help="Path to validation data text files in TFRecord format",
+                      default='./validation_tfrecord')
     parser.add_option("--wordvec-dict", dest="wvec_dict", help="Path to save word-index dictionary",
                       default='../WordVecFiles/wordToInd.dict')
     parser.add_option("--wordvec-mat", dest="wvec_mat", help="Path to save index-wordvector numpy matrix ",
@@ -30,5 +32,7 @@ if __name__ == '__main__':
     (options, _) = parser.parse_args()
     if int(options.mode) == 0:
         train(options)
+    elif int(options.mode) == 1:
+        test_loss(options)
     elif int(options.mode) == 2:
         chat(options)

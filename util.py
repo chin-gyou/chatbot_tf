@@ -79,6 +79,10 @@ def train(options):
         sess.run(init_op)
         print('Start Training...')
     try:
+        N_EXAMPLES = 787230
+        steps_per_epoch = N_EXAMPLES / options.batch_size
+        epoch = 1
+        pre_validation_loss = 100
         saver.save(sess, options.save_path + 'checkpoint_start')
         while not coord.should_stop():
             batch_loss, training, summary = sess.run([model.cost, model.optimise, merged])
@@ -89,15 +93,28 @@ def train(options):
             if train_step % int(options.save_freq) == 0:
                 saver.save(sess, options.save_path + 'checkpoint_' + str(train_step))
                 print('@iter:%d \t Model saved at: %s' % (train_step, options.save_path))
+            if train_step % steps_per_epoch == 0:
+                print('Start Validate...')
+                current_validation_loss = evaluate(sess, options.validation_dir, model, options.batch_size)
+                if current_validation_loss > pre_validation_loss:
+                    break
+                saver.save(sess, options.save_path + 'checkpoint_' + str(train_step) + '_epoch_' + str(epoch))
+                print('@epoch:%d \t Model saved at: %s' % (epoch, options.save_path))
+                pre_validation_loss = current_validation_loss
+                epoch += 1
+                print('Validate END...\t Next Epoch: %d' % (epoch))
     except tf.errors.OutOfRangeError:
         print('Training Complete...')
     finally:
         print('Saving final checkpoint...Model saved at :', options.save_path)
+        print('Total Epochs Run : %d' % (epoch))
         saver.save(sess, options.save_path + 'checkpoint_end')
         print('Halting Queues and Threads')
         coord.request_stop()
         coord.join(threads)
         sess.close()
+
+
 
 
 """
@@ -106,7 +123,8 @@ filedir: directory for evaluated tfrecords
 """
 
 
-def evaluate(sess, coord, filedir, model, batch_size):
+def evaluate(sess, filedir, model, batch_size):
+    step_evaluate = 34933/batch_size
     fileList = os.listdir(filedir)
     if fileList == []:
         print('\nNo input file found!')
@@ -116,21 +134,46 @@ def evaluate(sess, coord, filedir, model, batch_size):
     labels, length = dataproducer.batch_data(batch_size)
     # build model and graph
     model.labels, model.length = labels, length
-    step, total_loss = 0, 0
+    coord = tf.train.Coordinator()
+    step =  0
+    total_loss = 0
     threads = tf.train.start_queue_runners(coord=coord, sess=sess)
     try:
         while not coord.should_stop():
             batch_loss = sess.run([model.cost])
             step += 1
+            total_loss += batch_loss[0]
             if step % 100 == 0:
-                print('[size:%d]Mini-Batches run : %d\t\tLoss : %f\t\tMean Loss: %f' % (batch_size), step, batch_loss,
-                      total_loss / step)
+                print('[size:%d]Mini-Batches run : %d\t\tLoss : %f\t\tMean Loss: %f' % (batch_size, step, batch_loss[0],
+                      total_loss / step))
+            if step == step_evaluate:
+                break
     except tf.errors.OutOfRangeError:
         print('Evaluating Complete...')
     finally:
         coord.request_stop()
         coord.join(threads)
         return total_loss / step
+
+    
+def test_loss(options):
+    model = build_graph(options)
+    variable_summaries(model.cost, 'loss')
+    merged = tf.merge_all_summaries()
+    saver = tf.train.Saver()
+    config = tf.ConfigProto(allow_soft_placement=False)
+    sess = tf.Session(config=config)
+    coord = tf.train.Coordinator()
+    init_op = tf.group(tf.initialize_all_variables(), tf.initialize_local_variables())
+    threads = tf.train.start_queue_runners(coord=coord, sess=sess)
+    if options.load_chkpt:
+        print('Loading saved variables from checkpoint file to graph')
+        saver.restore(sess, options.load_chkpt)
+        print('Starting test loss...')
+        final_loss = evaluate(sess, options.validation_dir, model, options.batch_size)
+        print('Final loss : %f' % final_loss)
+    else:
+        print('Forget checkpoint file.')
 
 
 def chat(options):
