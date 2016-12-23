@@ -25,3 +25,24 @@ class seq_enc_dec(base_enc_dec):
         1 - mask)  # learn initial state from context
         d = self.decode_level_rnn(prev_h[1], embedding)
         return [h, d]
+
+    def decode_bs(self, h_d):
+        last_d = h_d[1][-1]
+        k = 0
+        prev = tf.reshape(last_d, [1, self.h_size])
+        prev_d = tf.tile(prev, [self.beam_size, 1])
+        while k < 15:
+            if k == 0:
+                prev_d = prev    
+            inp = self.beam_search(prev_d, k)
+            prev_d = tf.reshape(tf.gather(prev_d, self.beam_path[-1]), [self.beam_size, self.h_size])
+            k += 1
+            with tf.variable_scope('decode') as dec:
+                dec.reuse_variables()
+                _, d_new = self.decodernet(inp, prev_d)
+                prev_d = d_new
+        decoded =  tf.reshape(self.output_beam_symbols[-1], [self.beam_size, -1])
+        #decoded =  tf.reshape(self.beam_symbols, [self.beam_size, -1])
+        return decoded 
+ 
+    
