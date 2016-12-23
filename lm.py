@@ -22,3 +22,21 @@ class lm(base_enc_dec):
         init_encode = tf.zeros([self.batch_size, self.h_size])
         h_d = tf.scan(self.run, self.labels, initializer=init_encode)
         return [1, h_d]
+
+    def decode_bs(self, h_d):
+        h = h_d[1]
+        k = 0
+        prev = tf.reshape(h[-1], [1, self.h_size])
+        prev_d = tf.tile(prev, [self.beam_size, 1])
+        while k < 15:
+            if k == 0:
+                prev_d = prev
+            inp = self.beam_search(prev_d, k)
+            k += 1
+            prev_d = tf.reshape(tf.gather(prev_d, self.beam_path[-1]), [self.beam_size, self.h_size])
+            with tf.variable_scope('encode') as enc:
+                enc.reuse_variables()
+                _, d_new = self.encodernet(inp, prev_d)
+            prev_d = d_new
+        decoded =  tf.reshape(self.output_beam_symbols[-1], [self.beam_size, -1])
+        return decoded     
