@@ -31,7 +31,7 @@ if __name__ == '__main__':
                       default='')
     (options, _) = parser.parse_args()
     if int(options.mode) == 0:
-        train(options)
+        train_with_validate(options)
     elif int(options.mode) == 1:
         test_loss(options)
     elif int(options.mode) == 2:
