@@ -148,7 +148,7 @@ def test_loss(options):
         print('Loading saved variables from checkpoint file to graph')
         saver.restore(sess, options.load_chkpt)
         print('Starting test loss...')
-        final_loss = evaluate(sess, options.validation_dir, model, options.batch_size)
+        final_loss = evaluate(sess, model, options.batch_size)
         print('Final loss : %f' % final_loss)
     else:
         print('Forget checkpoint file.')
@@ -159,7 +159,7 @@ evaluate a model with filedir and return the mean batch_loss
 filedir: directory for evaluated tfrecords
 """
 
-def evaluate(sess, filepath, model, batch_size):
+def evaluate(sess, model, batch_size):
     step_evaluate = 34933/batch_size
     #step_evaluate = 1280/batch_size
     coord = tf.train.Coordinator()
