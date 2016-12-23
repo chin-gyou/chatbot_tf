@@ -5,6 +5,8 @@ import os
 import pickle
 import sys
 
+# global for epoch
+epoch = 1
 
 # restore trainable variables from a checkpoint file, excluede some specific variables
 def restore_trainable(sess, chkpt):
@@ -30,9 +32,9 @@ def variable_summaries(var, name):
         tf.scalar_summary('mean/' + name, mean)
 
 
-def build_graph(options):
+def build_graph(options, path):
     # get input file list and word vectors
-    fileList = os.listdir(options.input_path)
+    fileList = os.listdir(path)
     if fileList == []:
         print('\nNo input file found!')
         sys.exit()
@@ -45,19 +47,20 @@ def build_graph(options):
             raise Exception('[ERROR]Word Vector File not found!')
     # get input data
     vocab_size, e_size = word_vecs.shape
-    fileList = [os.path.join(options.input_path, item) for item in fileList]
+    fileList = [os.path.join(path, item) for item in fileList]
     dataproducer = data_producer(fileList, int(options.num_epochs))
     labels, length = dataproducer.batch_data(int(options.batch_size))
     # build model and graph
     # model = vhred(labels, length, int(options.h_size), int(options.c_size), int(options.z_size),vocab_size, word_vecs,
     #             int(options.batch_size), float(options.lr), int(options.mode))
-    model = sphred(labels, length, int(options.h_size), int(options.c_size), vocab_size, word_vecs,
+    model = hred(labels, length, int(options.h_size), int(options.c_size), vocab_size, word_vecs,
                    int(options.batch_size), float(options.lr), int(options.mode))
     return model
 
 
 def train(options):
-    model = build_graph(options)
+    global epoch
+    model = build_graph(options, options.input_path)
     variable_summaries(model.cost, 'loss')
     merged = tf.merge_all_summaries()
     saver = tf.train.Saver(keep_checkpoint_every_n_hours=2)
@@ -72,100 +75,75 @@ def train(options):
     if options.load_chkpt:
         print('Loading saved variables from checkpoint file to graph')
         sess.run(init_op)
-        # saver.restore(sess, options.load_chkpt)
-        restore_trainable(sess, options.load_chkpt)
+        saver.restore(sess, options.load_chkpt)
+        #restore_trainable(sess, options.load_chkpt)
         print('Resume Training...')
     else:
         sess.run(init_op)
         print('Start Training...')
     try:
+        #N_EXAMPLES = 12800
         N_EXAMPLES = 787230
-        steps_per_epoch = N_EXAMPLES / options.batch_size
-        epoch = 1
-        pre_validation_loss = 100
-        saver.save(sess, options.save_path + 'checkpoint_start')
+        steps_per_epoch = N_EXAMPLES / int(options.batch_size)
         while not coord.should_stop():
             batch_loss, training, summary = sess.run([model.cost, model.optimise, merged])
             train_step = training[0]
             if train_step % 100 == 0:
                 sum_writer.add_summary(summary, train_step)
-                print('[size:%d]Mini-Batches run : %d\t\tLoss : %f' % (int(options.batch_size), train_step, batch_loss))
-            if train_step % int(options.save_freq) == 0:
-                saver.save(sess, options.save_path + 'checkpoint_' + str(train_step))
-                print('@iter:%d \t Model saved at: %s' % (train_step, options.save_path))
-            if train_step % steps_per_epoch == 0:
-                print('Start Validate...')
-                current_validation_loss = evaluate(sess, options.validation_dir, model, options.batch_size)
-                if current_validation_loss > pre_validation_loss:
-                    break
-                saver.save(sess, options.save_path + 'checkpoint_' + str(train_step) + '_epoch_' + str(epoch))
-                print('@epoch:%d \t Model saved at: %s' % (epoch, options.save_path))
-                pre_validation_loss = current_validation_loss
-                epoch += 1
-                print('Validate END...\t Next Epoch: %d' % (epoch))
+                print('[Epoch:%d][size:%d]Mini-Batches run : %d\t\tLoss : %f' % (epoch,int(options.batch_size), train_step, batch_loss))
+            if train_step % steps_per_epoch == 0: 
+                break
     except tf.errors.OutOfRangeError:
         print('Training Complete...')
     finally:
-        print('Saving final checkpoint...Model saved at :', options.save_path)
-        print('Total Epochs Run : %d' % (epoch))
-        saver.save(sess, options.save_path + 'checkpoint_end')
-        print('Halting Queues and Threads')
+        print('[Epoch %d] training finished!' % (epoch))
+        print('Saving checkpoint...Model saved at :', options.save_path)
+        if options.temp_chkpt != "":
+            saver.save(sess, options.save_path + options.temp_chkpt)
+        else:
+            saver.save(sess, options.save_path + 'checkpoint_end')
         coord.request_stop()
         coord.join(threads)
         sess.close()
+        tf.reset_default_graph()
 
-
-
-
-"""
-evaluate a model with filedir and return the mean batch_loss
-filedir: directory for evaluated tfrecords
-"""
-
-
-def evaluate(sess, filedir, model, batch_size):
-    step_evaluate = 34933/batch_size
-    fileList = os.listdir(filedir)
-    if fileList == []:
-        print('\nNo input file found!')
-        sys.exit()
-    fileList = [os.path.join(filedir, item) for item in fileList]
-    dataproducer = data_producer(fileList, 1)
-    labels, length = dataproducer.batch_data(batch_size)
-    # build model and graph
-    model.labels, model.length = labels, length
-    coord = tf.train.Coordinator()
-    step =  0
-    total_loss = 0
-    threads = tf.train.start_queue_runners(coord=coord, sess=sess)
-    try:
-        while not coord.should_stop():
-            batch_loss = sess.run([model.cost])
-            step += 1
-            total_loss += batch_loss[0]
-            if step % 100 == 0:
-                print('[size:%d]Mini-Batches run : %d\t\tLoss : %f\t\tMean Loss: %f' % (batch_size, step, batch_loss[0],
-                      total_loss / step))
-            if step == step_evaluate:
+def train_with_validate(options):
+    global epoch
+    extra_num  =  1
+    min_validate_loss = 1000 
+    options.temp_chkpt = ""
+    train(options)
+    options.load_chkpt = "Checkpoints/checkpoint_end"
+    while True:    
+        epoch  += 1
+        train(options)
+        current_validate_loss = test_loss(options)
+        if current_validate_loss < min_validate_loss:
+            best_epoch = epoch
+            options.temp_chkpt = ""
+            options.load_chkpt = "Checkpoints/checkpoint_temp" if extra_num > 1 else "Checkpoints/checkpoint_end"
+            extra_num  = 1
+            min_validate_loss = current_validate_loss
+        else:
+            options.temp_chkpt = "checkpoint_temp"
+            if extra_num == 1:
+                extra_num += 1
+            elif extra_num > 1 and extra_num < 3:
+                extra_num += 1
+                options.temp_chkpt = "checkpoint_temp"
+                options.load_chkpt = "Checkpoints/checkpoint_temp"
+            else:
+                print("Validation loss no longer decrease! Stop training!")
+                print("Best training epoch : %d" % (epoch))
                 break
-    except tf.errors.OutOfRangeError:
-        print('Evaluating Complete...')
-    finally:
-        coord.request_stop()
-        coord.join(threads)
-        return total_loss / step
-
     
+
 def test_loss(options):
-    model = build_graph(options)
-    variable_summaries(model.cost, 'loss')
-    merged = tf.merge_all_summaries()
+    model = build_graph(options, options.validation_dir)
     saver = tf.train.Saver()
     config = tf.ConfigProto(allow_soft_placement=False)
     sess = tf.Session(config=config)
-    coord = tf.train.Coordinator()
     init_op = tf.group(tf.initialize_all_variables(), tf.initialize_local_variables())
-    threads = tf.train.start_queue_runners(coord=coord, sess=sess)
     if options.load_chkpt:
         print('Loading saved variables from checkpoint file to graph')
         saver.restore(sess, options.load_chkpt)
@@ -174,6 +152,39 @@ def test_loss(options):
         print('Final loss : %f' % final_loss)
     else:
         print('Forget checkpoint file.')
+    return final_loss
+
+"""
+evaluate a model with filedir and return the mean batch_loss
+filedir: directory for evaluated tfrecords
+"""
+
+def evaluate(sess, filepath, model, batch_size):
+    step_evaluate = 34933/batch_size
+    #step_evaluate = 1280/batch_size
+    coord = tf.train.Coordinator()
+    step =  0
+    total_loss = 0
+    threads = tf.train.start_queue_runners(coord=coord, sess=sess)
+    try:
+        while not coord.should_stop():
+            batch_loss = sess.run([model.cost])
+            batch_loss = batch_loss[0]
+            step += 1
+            total_loss += batch_loss
+            if step % 100 == 0:
+                print('[Test][size:%d]Mini-Batches run : %d\t\tLoss : %f\t\tMean Loss: %f' % (batch_size, step, batch_loss,
+                      total_loss / step))
+            if step == step_evaluate:
+                break
+    except tf.errors.OutOfRangeError:
+        print('Evaluating Complete...')
+    finally:
+        coord.request_stop()
+        coord.join(threads)
+        tf.reset_default_graph()
+        return total_loss / step
+
 
 
 def chat(options):
