@@ -192,8 +192,9 @@ def evaluate(sess, model, batch_size):
 
 
 def chat(options):
-    fileList = os.listdir(options.input_path)
-    fileList = [os.path.join(options.input_path, item) for item in fileList]
+    options.batch_size = 1
+    fileList = os.listdir(options.chat_test_path)
+    fileList = [os.path.join(options.chat_test_path, item) for item in fileList]
     with open(options.wvec_dict,'rb') as f:
         dics=pickle.load(f)
     # i+1, 0 stand for padding elements
