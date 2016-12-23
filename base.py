@@ -137,14 +137,14 @@ class base_enc_dec:
             k += 1
             with tf.variable_scope('encode') as enc:
                 enc.reuse_variables()
+                prev_e = tf.reshape(tf.gather(prev_e, self.beam_path[-1]), [self.beam_size, self.h_size])
                 _, e_new = self.encodernet(inp, prev_e)
-                e_new = tf.reshape(tf.gather(e_new, self.beam_path[-1]), [self.beam_size, self.h_size])
             if k == 1:
                 prev_d = tf.tile(h_d[-1], [self.beam_size, 1])
             with tf.variable_scope('decode') as dec:
                 dec.reuse_variables()
+                prev_d = tf.reshape(tf.gather(prev_d, self.beam_path[-1]), [self.beam_size, self.h_size])
                 _, d_new = self.decodernet(e_new, prev_d)
-                d_new = tf.reshape(tf.gather(d_new, self.beam_path[-1]), [self.beam_size, self.h_size])
             prev_e = e_new
             prev_d = d_new
         decoded =  tf.reshape(self.output_beam_symbols[-1], [self.beam_size, -1])
