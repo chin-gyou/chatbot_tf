@@ -47,14 +47,15 @@ class data_producer:
     # labels: list of label(length), save as tfrecord form
     def save_record(self, labels, fout, limit=80):
         writer = tf.python_io.TFRecordWriter(fout)
-        for i, dialogue in enumerate(labels):
-            if i % 100 == 0:
-                print(i)
-            else:
-                for ex in self.slice_dialogue(dialogue, limit):
-                    writer.write(ex.SerializeToString())
+        num_record = 0
+        for dialogue in labels:
+            if num_record % 100 == 0:
+                print(num_record)
+            for ex in self.slice_dialogue(dialogue, limit):
+                num_record += 1
+                writer.write(ex.SerializeToString())
         writer.close()
-        print('close')
+        print('num_record:', num_record)
 
     # read from a list of TF_Record files frs, return a parsed Sequence_example
     # Every Sequence_example contains one dialogue

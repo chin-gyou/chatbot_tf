@@ -7,7 +7,8 @@ class vhred(hred):
     def __init__(self, labels, length, h_size, c_size, z_size, vocab_size, embedding, batch_size, learning_rate, mode,
                  beam_size=5):
         # prior distribution parameters
-        self.scale_cov = 0.01
+        self.scale_cov = 0.1
+        self.klscale = tf.constant(1 / 75000)
         self.first_priff = Dense("Latent", z_size, c_size, nonlinearity=tf.tanh, name='first_priff')
         self.second_priff = Dense("Latent", z_size, z_size, nonlinearity=tf.tanh, name='second_priff')
         self.first_postff = Dense("Latent", z_size, c_size + h_size, nonlinearity=tf.tanh, name='first_postff')
@@ -86,7 +87,11 @@ class vhred(hred):
         pos_mean, pos_cov = self.compute_post(tf.concat(1, [h, prev_h[1]]))
         kl = prev_h[3] + self.__kldivergence(pos_mean, pri_mean, pos_cov, pri_cov) * (
         1 - mask)  # divergence increases when meeting eou
-        print('z:', z)
+
+        # drop out with 0.25
+        drop_mask = tf.cast(tf.random_uniform([self.batch_size, 1], maxval=1) > 0.75, tf.float32)
+        unk_embedding = self.embedding_W[1]
+        embedding = embedding * (1 - drop_mask) + unk_embedding * drop_mask
         # concate embedding and h_s for decoding
         d = self.decode_level_rnn(prev_h[4], tf.concat(1, [z, h_s, embedding]), mask)
         return [h, h_s, z, kl, d]
@@ -99,6 +104,7 @@ class vhred(hred):
         init_hier = tf.zeros([self.batch_size, self.c_size])
         init_latent = tf.random_normal([self.batch_size, self.z_size])
         init_decoder = tf.zeros([self.batch_size, self.h_size])
+
         _, h_s, _, kl, h_d = tf.scan(self.run, [self.labels, self.rolled_label],
                                      initializer=[init_encode, init_hier, init_latent, self.kl, init_decoder])
         return [h_s, kl, h_d]
@@ -130,5 +136,6 @@ class vhred(hred):
     def optimise(self):
         optim = tf.train.AdamOptimizer(self.learning_rate)
         global_step = tf.Variable(0, name='global_step', trainable=False)
-        train_op = optim.minimize(self.cost[0] + self.cost[1], global_step=global_step)
+        train_op = optim.minimize(self.cost[0] + self.klscale * self.cost[1], global_step=global_step)
+        self.klscale += (1 / 75000 * tf.to_float(tf.less(self.klscale, 1)))  #increase if less than 1
         return global_step, train_op

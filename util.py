@@ -12,8 +12,10 @@ epoch = 1
 def restore_trainable(sess, chkpt):
     trainable = {v.op.name: v for v in tf.trainable_variables()}
     print('trainable:', trainable)
-    exclude = set()
-    # exclude={'hier/Init_W','hier/Init_b','decode/GRUCell/Candidate/Linear/Matrix','decode/GRUCell/Candidate/Linear/Bias','decode/GRUCell/Gates/Linear/Matrix','decode/GRUCell/Gates/Linear/Bias'}# excluded variables
+    # exclude = set()
+    exclude = {'hier/Init_W', 'hier/Init_b', 'decode/GRUCell/Candidate/Linear/Matrix',
+               'decode/GRUCell/Candidate/Linear/Bias', 'decode/GRUCell/Gates/Linear/Matrix',
+               'decode/GRUCell/Gates/Linear/Bias'}  # excluded variables
     trainable = {key: value for key, value in trainable.items() if key not in exclude}
     reader = tf.train.NewCheckpointReader(chkpt)
     var_to_shape_map = reader.get_variable_to_shape_map()
@@ -58,7 +60,7 @@ def build_graph(options, path):
     return model
 
 
-def train(options):
+def train(options, start=False):
     global epoch
     model = build_graph(options, options.input_path)
     variable_summaries(model.cost, 'loss')
@@ -75,8 +77,10 @@ def train(options):
     if options.load_chkpt:
         print('Loading saved variables from checkpoint file to graph')
         sess.run(init_op)
-        saver.restore(sess, options.load_chkpt)
-        #restore_trainable(sess, options.load_chkpt)
+        if start:
+            restore_trainable(sess, options.load_chkpt)
+        else:
+            saver.restore(sess, options.load_chkpt)
         print('Resume Training...')
     else:
         sess.run(init_op)
@@ -84,7 +88,7 @@ def train(options):
     try:
         #N_EXAMPLES = 12800
         N_EXAMPLES = 787230
-        steps_per_epoch = N_EXAMPLES / int(options.batch_size)
+        steps_per_epoch = N_EXAMPLES // int(options.batch_size)
         while not coord.should_stop():
             batch_loss, training, summary = sess.run([model.cost, model.optimise, merged])
             train_step = training[0]
@@ -112,7 +116,7 @@ def train_with_validate(options):
     extra_num  =  1
     min_validate_loss = 1000 
     options.temp_chkpt = ""
-    train(options)
+    train(options, True)
     options.load_chkpt = "Checkpoints/checkpoint_end"
     while True:    
         epoch  += 1
@@ -160,7 +164,7 @@ filedir: directory for evaluated tfrecords
 """
 
 def evaluate(sess, model, batch_size):
-    step_evaluate = 34933/batch_size
+    step_evaluate = 35274 / batch_size
     #step_evaluate = 1280/batch_size
     coord = tf.train.Coordinator()
     step =  0
