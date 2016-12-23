@@ -18,20 +18,10 @@ class seq_enc_dec(base_enc_dec):
     """
 
     def run(self, prev_h, input_labels):
-        mask = self.gen_mask(input_labels[0], EOU)
-        embedding = self.embed_labels(input_labels[0])
-        rolled_embedding = self.embed_labels(input_labels[1])
+        mask = self.gen_mask(input_labels, EOU)
+        embedding = self.embed_labels(input_labels)
         h = self.word_level_rnn(prev_h[0], embedding)
         prev_h[1] = prev_h[1] * mask + tf.tanh(tf.matmul(h, self.init_W) + self.init_b) * (
         1 - mask)  # learn initial state from context
-        d = self.decode_level_rnn(prev_h[1], rolled_embedding)
+        d = self.decode_level_rnn(prev_h[1], embedding)
         return [h, d]
-
-    # scan step, return output hidden state of the output layer
-    # h_d states after running, max_len*batch_size*h_size
-    def scan_step(self):
-        init_encode = tf.zeros([self.batch_size, self.h_size])
-        init_decoder = tf.zeros([self.batch_size, self.h_size])
-        h, h_d = tf.scan(self.run, [self.labels, self.rolled_label],
-                         initializer=[init_encode, init_decoder])
-        return [h, h_d]

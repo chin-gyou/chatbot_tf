@@ -4,7 +4,6 @@ import tensorflow as tf
 class Dense():
     def __init__(self, scope="dense_layer", size=512, xsize=512, dropout=1.,
                  nonlinearity=tf.identity, name='dense'):
-        assert (size, xsize), "Must specify layer size (num nodes)"
         self.__dict__.update(locals())
         with tf.name_scope(scope):
             self.w, self.b = self.wbVars(xsize, size, name)
