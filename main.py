@@ -9,9 +9,9 @@ if __name__ == '__main__':
     parser.add_option("-v", "--validation-dir", dest="validation_dir", help="Path to validation data text files in TFRecord format",
                       default='../revisedchatbot/validationdir')
     parser.add_option("--chat", "--chat-test-path", dest="chat_test_path", help="Path to chat test raw data",
-                      default='../revisedchatbot/rawtestdir')
+                      default='../revisedchatbot/contexttest')
     parser.add_option("--wordvec-dict", dest="wvec_dict", help="Path to save word-index dictionary",
-                      default='../WordVecFiles/wordToInd.dict')
+                      default='../chatbot3/Dataset.dict.pkl')
     parser.add_option("--wordvec-mat", dest="wvec_mat", help="Path to save index-wordvector numpy matrix ",
                       default='../revisedchatbot/embedding.mat')
     parser.add_option("-b", "--batch-size", dest="batch_size", help="Size of mini batch", default=128)

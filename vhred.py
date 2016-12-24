@@ -8,7 +8,7 @@ class vhred(hred):
                  beam_size=5):
         # prior distribution parameters
         self.scale_cov = 0.1
-        self.klscale = tf.constant(1 / 75000)
+        self.klscale = tf.get_variable(name='klscale', initializer=1.0, trainable=False)
         self.first_priff = Dense("Latent", z_size, c_size, nonlinearity=tf.tanh, name='first_priff')
         self.second_priff = Dense("Latent", z_size, z_size, nonlinearity=tf.tanh, name='second_priff')
         self.first_postff = Dense("Latent", z_size, c_size + h_size, nonlinearity=tf.tanh, name='first_postff')
@@ -130,12 +130,12 @@ class vhred(hred):
         # normalized loss per example
         mean_loss_by_example = tf.reduce_sum(masked_losses, reduction_indices=0) / tf.to_float(self.length)
         print('kldivergence:', self.prediction[1])
-        return tf.reduce_mean(mean_loss_by_example), tf.reduce_mean(self.prediction[1])  # average loss of the batch
+        return tf.reduce_mean(mean_loss_by_example), tf.reduce_mean(
+            self.prediction[1]) * self.klscale / 75000  # average loss of the batch
 
     @exe_once
     def optimise(self):
         optim = tf.train.AdamOptimizer(self.learning_rate)
         global_step = tf.Variable(0, name='global_step', trainable=False)
-        train_op = optim.minimize(self.cost[0] + self.klscale * self.cost[1], global_step=global_step)
-        self.klscale += (1 / 75000 * tf.to_float(tf.less(self.klscale, 1)))  #increase if less than 1
-        return global_step, train_op
+        train_op = optim.minimize(self.cost[0] + self.cost[1], global_step=global_step)
+        return global_step, train_op, tf.assign_add(self.klscale, tf.to_float(tf.less(self.klscale, 75000)))
