@@ -163,7 +163,7 @@ filedir: directory for evaluated tfrecords
 
 
 def evaluate(sess, model, batch_size):
-    step_evaluate = 35274 / batch_size
+    step_evaluate = 35274 // batch_size
     # step_evaluate = 1280/batch_size
     coord = tf.train.Coordinator()
     step = 0
