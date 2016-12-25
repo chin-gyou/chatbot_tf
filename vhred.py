@@ -151,8 +151,8 @@ class vhred(hred):
         mean_loss_by_example = tf.reduce_sum(masked_losses, reduction_indices=0) / tf.to_float(self.length)
 
         # average kl-divergence
-        num_eos = tf.reduce_sum(tf.cast(tf.not_equal(self.labels[:-1], EOU), tf.float32))
-        avg_kl = self.prediction[1] / num_eos
+        self.num_eos = tf.reduce_sum(tf.cast(tf.equal(self.labels[:-1], EOU), tf.float32))
+        avg_kl = self.prediction[1] / self.num_eos
         return tf.reduce_mean(mean_loss_by_example), avg_kl  # average loss of the batch
 
     @exe_once
