@@ -22,6 +22,14 @@ class Dense():
                 return tf.reshape(result, new_shape)
             return tf.reshape(result, [-1, self.size])
 
+    @staticmethod
+    def origin_init(fan_in, fan_out, name):
+        initial_w = tf.random_normal([fan_in, fan_out], stddev=0.01)
+        initial_b = tf.zeros([fan_out])
+        return (tf.Variable(initial_w, trainable=True, name=name + "weights"),
+                tf.Variable(initial_b, trainable=True, name=name + "biases"))
+
+
     # Helper to initialize weights and biases, via He's adaptation
     # of Xavier init for ReLUs: https://arxiv.org/abs/1502.01852
     @staticmethod
