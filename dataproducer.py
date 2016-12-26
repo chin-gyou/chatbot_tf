@@ -38,7 +38,7 @@ class data_producer:
             length = limit
             if start + limit > len(dialogue):  # padding 0
                 length = len(dialogue) - start
-                dialogue.extend([0] * (start + limit - len(dialogue)))
+                dialogue.extend([-1] * (start + limit - len(dialogue)))
             ex = self.__make_example(dialogue[start:start + limit], length)
             start += (limit - 1)
             exs.append(ex)
