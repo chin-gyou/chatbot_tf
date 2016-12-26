@@ -56,7 +56,7 @@ class sphred(hred):
     # scan step, return output hidden state of the output layer
     # h_d states after running, max_len*batch_size*h_size
     def scan_step(self):
-        num_seq = tf.zeros([self.batch_size, 1])  # id of the current speech, increase when meeting 0 or 2
+        num_seq = tf.zeros([self.batch_size, 1])  # id of the current speech, increase when meeting 2
         init_encode = tf.zeros([self.batch_size, self.h_size])
         init_hier = [tf.zeros([self.batch_size, self.c_size]), tf.zeros([self.batch_size, self.c_size])]
         init_decoder = tf.zeros([self.batch_size, self.h_size])

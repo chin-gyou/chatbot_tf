@@ -52,10 +52,12 @@ class vhred(hred):
             return mu + epsilon * sigma  # N(mu, I * sigma**2)
 
     # KL-divergence within one batch
-    def __kldivergence(self, mu1, mu2, s1, s2):
+    def _kldivergence(self, mu1, mu2, s1, s2):
         """Average (Gaussian) Kullback-Leibler divergence KL(g1||g2), per training batch"""
         # (tf.Tensor, tf.Tensor) -> tf.Tensor
         with tf.name_scope("KL_divergence"):
+            print('mu1:', mu1)
+            print('mu2:', mu2)
             kl = 0.5 * (tf.reduce_sum(tf.log(tf.abs(s2)) - tf.log(tf.abs(s1)) + s1 / s2 + (
                 mu2 - mu1) ** 2 / s2, reduction_indices=[1]) - self.z_size)
             return tf.reshape(kl, [self.batch_size, 1])
@@ -137,11 +139,13 @@ class vhred(hred):
             sequences = self.decode_bs(h_d)
             return sequences
         predicted = tf.reshape(h_d[1], [-1, self.h_size])  # exclude the last prediction
-        output = tf.matmul(predicted, self.output_W) + self.output_b  # (max_len*batch_size)*vocab_size
+        output = self.output1(predicted)  # (max_len*batch_size)*vocab_size
+        output = self.output2(output)
         return output, tf.reduce_sum(h_d[0][-1])  # kldivergence
 
     @exe_once
     def cost(self):
+        print('labels:', self.labels[1:])
         y_flat = tf.reshape(self.labels[1:], [-1])  # exclude the first padded label
         loss = tf.nn.sparse_softmax_cross_entropy_with_logits(self.prediction[0], y_flat)
         # Mask the losses

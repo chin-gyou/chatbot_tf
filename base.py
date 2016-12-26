@@ -1,6 +1,7 @@
 import functools
 from tensorflow.python.ops import rnn_cell
 import tensorflow as tf
+from dense import *
 
 # end token index
 EOU = 18576
@@ -52,12 +53,10 @@ class base_enc_dec:
             # embedding matrix
             self.embedding_W = tf.get_variable('Embedding_W', initializer=embedding)
             self.embedding_b = tf.get_variable('Embedding_b', initializer=tf.zeros([300]))
+        self.output1 = Dense('decode', 300, h_size, name='output1')
+        self.output2 = Dense('decode', vocab_size, 300, name='output2')
         with tf.variable_scope('decode'):
             self.decodernet = rnn_cell.GRUCell(h_size)
-            self.output_W = tf.get_variable('Output_W', initializer=tf.random_normal([h_size, 300], stddev=0.01))
-            self.output_b = tf.get_variable('Output_b', initializer=tf.zeros([300]))
-            self.output_W2 = tf.get_variable('Output_W2', initializer=tf.random_normal([300, vocab_size], stddev=0.01))
-            self.output_b2 = tf.get_variable('Output_b2', initializer=tf.zeros([vocab_size]))
 
     """
     word-level rnn step
@@ -122,8 +121,8 @@ class base_enc_dec:
             sequences = self.decode_bs(h_d)
             return sequences
         predicted = tf.reshape(h_d[1][:-1], [-1, self.h_size])  # exclude the last prediction
-        output = tf.matmul(predicted, self.output_W) + self.output_b  #(max_len*batch_size)*vocab_size
-        output = tf.matmul(output, self.output_W2) + self.output_b2
+        output = self.output1(predicted)  # (max_len*batch_size)*vocab_size
+        output = self.output2(output)
         return output
 
     def decode_bs(self, h_d):
