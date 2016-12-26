@@ -127,7 +127,7 @@ class vhred(hred):
         kl, h_d, _ = tf.scan(self.run_second, [h_s[:-1], r_h[1:], self.labels[:-1]],
                              initializer=[kl, init_decoder, init_latent])
 
-        return [kl, h_d]
+        return [kl, h_d, h_s]
 
     # return output layer
     @exe_once
@@ -139,6 +139,30 @@ class vhred(hred):
         predicted = tf.reshape(h_d[1], [-1, self.h_size])  # exclude the last prediction
         output = tf.matmul(predicted, self.output_W) + self.output_b  # (max_len*batch_size)*vocab_size
         return output, tf.reduce_sum(h_d[0][-1])  # kldivergence
+
+    def decode_bs(self, h_d):
+        last_h_s = h_d[2][-1]
+        pri_mean, pri_cov = self.compute_prior(last_h_s)
+        z = self.sampleGaussian(pri_mean, pri_cov)
+        z_hs = tf.concat(1, [z, last_h_s])
+        prev_d = tf.tanh(tf.matmul(z_hs, self.init_W) + self.init_b)
+        inp = tf.zeros([1, 300])
+        k = 0
+        while k < 15:
+            if k == 1:
+                z_hs = tf.tile(z_hs, [self.beam_size, 1])   
+            with tf.variable_scope('decode') as dec:
+                dec.reuse_variables()
+                _, d_new = self.decodernet(tf.concat(1, [z_hs, inp]), prev_d)
+                prev_d = d_new
+            inp = self.beam_search(prev_d, k)
+            prev_d = tf.reshape(tf.gather(prev_d, self.beam_path[-1]), [self.beam_size, self.h_size])
+            k += 1
+        decoded =  tf.reshape(self.output_beam_symbols[-1], [self.beam_size, -1])
+        return decoded 
+ 
+
+
 
     @exe_once
     def cost(self):
