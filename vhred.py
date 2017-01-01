@@ -48,7 +48,6 @@ class vhred(hred):
         with tf.name_scope("sample_gaussian"):
             # reparameterization trick
             epsilon = tf.random_normal(tf.shape(sigma), name="epsilon")
-            print('mu:', mu)
             return mu + epsilon * sigma  # N(mu, I * sigma**2)
 
     # KL-divergence within one batch
@@ -56,8 +55,6 @@ class vhred(hred):
         """Average (Gaussian) Kullback-Leibler divergence KL(g1||g2), per training batch"""
         # (tf.Tensor, tf.Tensor) -> tf.Tensor
         with tf.name_scope("KL_divergence"):
-            print('mu1:', mu1)
-            print('mu2:', mu2)
             kl = 0.5 * (tf.reduce_sum(tf.log(tf.abs(s2)) - tf.log(tf.abs(s1)) + s1 / s2 + (
                 mu2 - mu1) ** 2 / s2, reduction_indices=[1]) - self.z_size)
             return tf.reshape(kl, [self.batch_size, 1])
@@ -79,12 +76,10 @@ class vhred(hred):
         mask = self.gen_mask(label, EOU)
         embedding *= mask  # mark first embedding as 0
 
-        print('h_s:', h_s)
-        print('r_h:', r_h)
         # compute posterior
         pri_mean, pri_cov = self.compute_prior(h_s)
         pos_mean, pos_cov = self.compute_post(tf.concat(1, [r_h, h_s]))
-        kl = pre_kl + self.__kldivergence(pos_mean, pri_mean, pos_cov, pri_cov) * (
+        kl = pre_kl + self._kldivergence(pos_mean, pri_mean, pos_cov, pri_cov) * (
             1 - mask)  # divergence increases when meeting eou
 
         # drop out with 0.25
@@ -119,12 +114,7 @@ class vhred(hred):
         h, h_s = tf.scan(self.run_first, [self.labels, self.rolled_label], initializer=[init_encode, init_hier])
         r_h = tf.reverse(h, dims=[True, False, False])
         r_mask = tf.reverse(mask, [True, False])
-        print('r_h:', r_h)
-        print('mask:', mask)
-        print('r_h[0]', r_h[0])
         reversed_h = tf.scan(self.reverse_h, [r_h, r_mask], initializer=r_h[0])
-        print('reversed_h:', reversed_h)
-        print('h_s:', h_s)
         r_h = tf.reverse(reversed_h, dims=[True, False, False])
         kl, h_d, _ = tf.scan(self.run_second, [h_s[:-1], r_h[1:], self.labels[:-1]],
                              initializer=[kl, init_decoder, init_latent])
