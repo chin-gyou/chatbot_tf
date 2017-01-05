@@ -9,7 +9,8 @@ class hred(base_enc_dec):
         with tf.variable_scope('hier'):
             self.hiernet = rnn_cell.GRUCell(c_size)
             print(self.context_len)
-            self.init_W = tf.get_variable('Init_W', initializer=tf.random_normal([self.context_len, h_size]))
+            self.init_W = tf.get_variable('Init_W',
+                                          initializer=tf.random_normal([self.context_len, h_size], stddev=0.01))
             self.init_b = tf.get_variable('Init_b', initializer=tf.zeros([h_size]))
         base_enc_dec.__init__(self, labels, length, h_size, vocab_size, embedding, batch_size, learning_rate, mode,
                               beam_size)

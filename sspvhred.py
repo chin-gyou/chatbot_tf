@@ -1,6 +1,5 @@
 from spvhred import *
 
-
 class sspvhred(spvhred):
     # e_size: size of label embedding
     # obj: max_len*batch_size, objective labels
@@ -165,8 +164,8 @@ class sspvhred(spvhred):
     def optimise(self):
         optim = tf.train.AdamOptimizer(self.learning_rate)
         global_step = tf.Variable(0, name='global_step', trainable=False)
-        print self.cost[0],self.cost[1],self.cost[2]
         train_op = optim.minimize(
-            self.cost[0]+self.cost[2] * tf.to_float(tf.reduce_min([1, global_step / 75000]))   + self.cost[1] * tf.to_float(tf.reduce_min([1, tf.to_float(global_step) / 75000.0])),
+            self.cost[0] + self.cost[2] * tf.to_float(tf.reduce_min([1, global_step / 75000])) + self.cost[
+                1] * tf.to_float(tf.reduce_min([1, tf.to_float(global_step) / 75000.0])),
             global_step=global_step)
         return global_step, train_op, tf.to_float(tf.reduce_min([1, tf.to_float(global_step) / 75000.0]))

@@ -1,6 +1,5 @@
 from vhred import *
 
-
 class spvhred(vhred):
     @init_final
     def __init__(self, labels, length, h_size, c_size, z_size, vocab_size, embedding, batch_size, learning_rate, mode,
@@ -24,7 +23,7 @@ class spvhred(vhred):
         return 2 * self.c_size + self.z_size
 
     def hier_level_rnn(self, prev_h, input_vec, mask, eot_mask, num_seq):
-        with tf.variable_scope('hier'):
+        with tf.variable_scope('hier', initializer=orthogonal_initializer()):
             state_mask = num_seq % 2  # even:0, odd: 1
             prev_state = prev_h[0] * (1 - state_mask) + prev_h[1] * state_mask  # even: prev[0], odd: prev[1]
             _, h_new = self.hiernet(input_vec, prev_state)

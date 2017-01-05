@@ -6,7 +6,7 @@ class Dense():
                  nonlinearity=tf.identity, name='dense'):
         self.__dict__.update(locals())
         with tf.name_scope(scope):
-            self.w, self.b = self.wbVars(xsize, size, name)
+            self.w, self.b = self.origin_init(xsize, size, name)
             self.w = tf.nn.dropout(self.w, dropout)
 
     # x: N1...Nn*x_size
@@ -20,7 +20,7 @@ class Dense():
                 dims = tf.slice(tf.shape(x), [0], [tf.rank(x) - 1])
                 new_shape = tf.concat(0, [dims, [self.size]])
                 return tf.reshape(result, new_shape)
-            return tf.reshape(result, [-1, self.size])
+            return result
 
     @staticmethod
     def origin_init(fan_in, fan_out, name):
