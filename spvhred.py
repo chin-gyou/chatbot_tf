@@ -100,7 +100,34 @@ class spvhred(vhred):
         kl, h_d, _ = tf.scan(self.run_second, [h_s[0][:-1], h_s[1][:-1], r_h[1:], self.labels[:-1], num_seq[:-1]],
                              initializer=[kl, init_decoder, init_latent])
 
-        return [kl, h_d]
+        return [kl, h_d, h_s, num_seq]
+
+    def decode_bs(self, h_d):
+        last_h_s = h_d[2][-1]
+        num_seq = h_d[3][-1]
+        state_mask = num_seq % 2
+        if state_mask:
+            h_s = tf.concat(1, [last_h_s[1], last_h_s[0]])
+        else:
+            h_s = tf.concat(1, [last_h_s[0], last_h_s[1]])
+        pri_mean, pri_cov = self.compute_prior(h_s)
+        z = self.sampleGaussian(pri_mean, pri_cov)
+        z_hs = tf.concat(1, [z, h_s])
+        prev_d = tf.tanh(tf.matmul(z_hs, self.init_W) + self.init_b)
+        inp = tf.zeros([1, 300])
+        k = 0
+        while k < 15:
+            if k == 1:
+                z_hs = tf.tile(z_hs, [self.beam_size, 1])   
+            with tf.variable_scope('decode') as dec:
+                dec.reuse_variables()
+                _, d_new = self.decodernet(tf.concat(1, [z_hs, inp]), prev_d)
+                prev_d = d_new
+            inp = self.beam_search(prev_d, k)
+            prev_d = tf.reshape(tf.gather(prev_d, self.beam_path[-1]), [self.beam_size, self.h_size])
+            k += 1
+        decoded =  tf.reshape(self.output_beam_symbols[-1], [self.beam_size, -1])
+        return decoded 
 
     @exe_once
     def cost(self):
