@@ -34,10 +34,10 @@ class sspvhred(spvhred):
 
     @property
     def context_len(self):
-        return 2 * self.c_size + self.z_size + self.e_size
+        return 2 * self.c_size + self.z_size
 
     # prev_h: kl divergence, decoder state, latent state
-    # input_labels: h_s, r_h, labels， num_seq
+    # input_labels: h_s, r_h, labels, num_seq
     def run_second(self, prev_h, input_labels):
         pre_kl, pre_err, pre_h_d, pre_z = prev_h
         h_s0, h_s1, r_h, r_obj, label, num_seq = input_labels
@@ -66,9 +66,13 @@ class sspvhred(spvhred):
         # sample latent variable
         z = self.sampleGaussian(pos_mean, pos_cov)
         z = z * (1 - mask) + pre_z * mask  # update when meeting eou or eot
-
-        pred_err = pre_err + tf.nn.sparse_softmax_cross_entropy_with_logits(self.pred(z), r_obj) * (1 - mask)
+        pred_err = pre_err + tf.reshape(tf.nn.sparse_softmax_cross_entropy_with_logits(tf.matmul(z,tf.transpose(self.obj_W, perm= [1,0])), r_obj), [self.batch_size,1]) * (1 - mask)
+        
+ #       pred_err = pre_err + tf.reshape(tf.nn.sparse_softmax_cross_entropy_with_logits(self.pred(z), r_obj), [self.batch_size,1]) * (1 - mask)
         # concate embedding and h_s for decoding
+        #z = tf.zeros([self.batch_size, self.z_size])
+        #h_s = tf.zeros([self.batch_size, 2*self.c_size])
+       # embedding = 
         d = self.decode_level_rnn(pre_h_d, tf.concat(1, [z, h_s, embedding]), mask)
         return [kl, pred_err, d, z]
 
@@ -94,7 +98,37 @@ class sspvhred(spvhred):
                                        [h_s[0][:-1], h_s[1][:-1], r_h[1:], self.obj, self.labels[:-1], num_seq[:-1]],
                                        initializer=[kl, pred_err, init_decoder, init_latent])
 
-        return [kl, pred_err, h_d]
+        return [kl, pred_err, h_d, h_s, num_seq ]
+
+    def decode_bs(self, h_d):
+        last_h_s = h_d[3][-1]
+        num_seq = h_d[4][-1]
+        state_mask = num_seq % 2
+        if state_mask:
+            h_s = tf.concat(1, [last_h_s[1], last_h_s[0]])
+        else:
+            h_s = tf.concat(1, [last_h_s[0], last_h_s[1]])
+        obj_embedding = tf.gather(self.obj_W, 0) + self.obj_b
+
+        pri_mean, pri_cov = self.compute_prior(tf.concat(1, [obj_embedding, h_s]))
+        z = self.sampleGaussian(pri_mean, pri_cov)
+        z_hs = tf.concat(1, [z, h_s])
+        prev_d = tf.tanh(tf.matmul(z_hs, self.init_W) + self.init_b)
+        inp = tf.zeros([1, 300])
+        k = 0
+        while k < 15:
+            if k == 1:
+                z_hs = tf.tile(z_hs, [self.beam_size, 1])   
+            with tf.variable_scope('decode') as dec:
+                dec.reuse_variables()
+                _, d_new = self.decodernet(tf.concat(1, [z_hs, inp]), prev_d)
+                prev_d = d_new
+            inp = self.beam_search(prev_d, k)
+            prev_d = tf.reshape(tf.gather(prev_d, self.beam_path[-1]), [self.beam_size, self.h_size])
+            k += 1
+        decoded =  tf.reshape(self.output_beam_symbols[-1], [self.beam_size, -1])
+        return decoded 
+
 
     # return output layer
     @exe_once
@@ -124,13 +158,15 @@ class sspvhred(spvhred):
             tf.cast(tf.equal(self.labels[:-1], EOT), tf.float32))
         avg_kl = self.prediction[1] / self.num_eos
         avg_err = self.prediction[2] / self.num_eos
+        #print 'sdasdasd', tf.reduce_mean(mean_loss_by_example), avg_kl, avg_err
         return tf.reduce_mean(mean_loss_by_example), avg_kl, avg_err  # average loss of the batch
 
     @exe_once
     def optimise(self):
         optim = tf.train.AdamOptimizer(self.learning_rate)
         global_step = tf.Variable(0, name='global_step', trainable=False)
+        print self.cost[0],self.cost[1],self.cost[2]
         train_op = optim.minimize(
-            self.cost[0] + self.cost[2] + self.cost[1] * tf.to_float(tf.reduce_min([1, global_step / 75000])),
+            self.cost[0]+self.cost[2] * tf.to_float(tf.reduce_min([1, global_step / 75000]))   + self.cost[1] * tf.to_float(tf.reduce_min([1, tf.to_float(global_step) / 75000.0])),
             global_step=global_step)
-        return global_step, train_op, tf.to_float(tf.reduce_min([1, global_step / 75000]))
+        return global_step, train_op, tf.to_float(tf.reduce_min([1, tf.to_float(global_step) / 75000.0]))
