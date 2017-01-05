@@ -153,8 +153,8 @@ class base_enc_dec:
         return decoded 
  
     def beam_search(self, prev, k):
-        output = tf.matmul(tf.reshape(prev, [-1, self.h_size]), self.output_W) + self.output_b
-        output = tf.matmul(output, self.output_W2) + self.output_b2
+        output = self.output1(prev)  # (max_len*batch_size)*vocab_size
+        output = self.output2(output)
         probs = tf.log(tf.nn.softmax(output))
         minus_probs = [0 for i in range(self.vocab_size)]
         minus_probs[1] = -1e20
