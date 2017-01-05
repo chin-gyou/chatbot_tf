@@ -48,7 +48,7 @@ class vhred(hred):
         with tf.name_scope("sample_gaussian"):
             # reparameterization trick
             epsilon = tf.random_normal(tf.shape(sigma), name="epsilon")
-            return mu + epsilon * sigma  # N(mu, I * sigma**2)
+            return mu + epsilon * tf.sqrt(sigma)  # N(mu, I * sigma**2)
 
     # KL-divergence within one batch
     def _kldivergence(self, mu1, mu2, s1, s2):
@@ -151,7 +151,7 @@ class vhred(hred):
             inp = self.beam_search(prev_d, k)
             prev_d = tf.reshape(tf.gather(prev_d, self.beam_path[-1]), [self.beam_size, self.h_size])
             k += 1
-        decoded =  tf.reshape(self.output_beam_symbols[-1], [self.beam_size, -1])
+        decoded = tf.reshape(self.output_beam_symbols[-1], [self.beam_size, -1])
         return decoded 
  
 

@@ -106,10 +106,8 @@ class spvhred(vhred):
         last_h_s = h_d[2][-1]
         num_seq = h_d[3][-1]
         state_mask = num_seq % 2
-        if state_mask:
-            h_s = tf.concat(1, [last_h_s[1], last_h_s[0]])
-        else:
-            h_s = tf.concat(1, [last_h_s[0], last_h_s[1]])
+        h_s = tf.concat(1, [last_h_s[1], last_h_s[0]]) * state_mask + tf.concat(1, [last_h_s[0], last_h_s[1]]) * (
+        1 - state_mask)
         pri_mean, pri_cov = self.compute_prior(h_s)
         z = self.sampleGaussian(pri_mean, pri_cov)
         z_hs = tf.concat(1, [z, h_s])

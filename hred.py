@@ -1,4 +1,5 @@
 from base import *
+from initialize import *
 
 
 class hred(base_enc_dec):
@@ -26,7 +27,7 @@ class hred(base_enc_dec):
     """
 
     def word_level_rnn(self, prev_h, input_embedding, mask):
-        with tf.variable_scope('encode'):
+        with tf.variable_scope('encode', initializer=orthogonal_initializer()):
             prev_h = prev_h * mask  # mask the fist state as zero
             _, h_new = self.encodernet(input_embedding, prev_h)
             return h_new
@@ -40,7 +41,7 @@ class hred(base_enc_dec):
     """
 
     def hier_level_rnn(self, prev_h, input_vec, mask):
-        with tf.variable_scope('hier'):
+        with tf.variable_scope('hier', initializer=orthogonal_initializer()):
             _, h_new = self.hiernet(input_vec, prev_h)
             h_masked = h_new * (1 - mask) + prev_h * mask  # update when meeting EOU
             return h_masked
@@ -53,7 +54,7 @@ class hred(base_enc_dec):
     input: batch_size*(c_size+embed_size)
     """
     def decode_level_rnn(self, prev_h, input_h, mask):
-        with tf.variable_scope('decode'):
+        with tf.variable_scope('decode', initializer=orthogonal_initializer()):
             prev_h = prev_h * mask + tf.tanh(tf.matmul(input_h[:, :self.context_len], self.init_W) + self.init_b) * (
             1 - mask)  # learn initial state from context
             _, h_new = self.decodernet(input_h, prev_h)
