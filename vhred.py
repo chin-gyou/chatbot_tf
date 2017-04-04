@@ -5,7 +5,7 @@ from dense import *
 class vhred(hred):
     @init_final
     def __init__(self, labels, length, h_size, c_size, z_size, vocab_size, embedding, batch_size, learning_rate, mode,
-                 beam_size=5):
+                 beam_size=5, bi=0):
         # prior distribution parameters
         self.scale_cov = 0.1
         self.first_priff = Dense("Latent", z_size, c_size, nonlinearity=tf.tanh, name='first_priff')
@@ -18,7 +18,7 @@ class vhred(hred):
         self.post_c = Dense("Latent", z_size, z_size, name='post_cov')
         self.z_size = z_size
         hred.__init__(self, labels, length, h_size, c_size, vocab_size, embedding, batch_size, learning_rate, mode,
-                      beam_size)
+                      beam_size,bi)
 
     @property
     def context_len(self):
@@ -63,7 +63,7 @@ class vhred(hred):
         mask = self.gen_mask(input_labels[0], EOU)
         rolled_mask = self.gen_mask(input_labels[1], EOU)
         embedding = self.embed_labels(input_labels[0])
-        h = self.word_level_rnn(prev_h[0], embedding, rolled_mask)
+        h = self.generate_encode(input_labels)
         h_s = self.hier_level_rnn(prev_h[1], h, mask)
         return [h, h_s]
 
@@ -105,13 +105,20 @@ class vhred(hred):
     # scan step, return output hidden state of the output layer
     # h_d states after running, max_len*batch_size*h_size
     def scan_step(self):
-        init_encode = tf.zeros([self.batch_size, self.h_size])
+        init_encode = tf.zeros([self.batch_size, self.h_size]) if self.bi==0 else tf.zeros([self.batch_size, 2*self.h_size])
         init_hier = tf.zeros([self.batch_size, self.c_size])
         init_latent = tf.zeros([self.batch_size, self.z_size])
         kl = tf.zeros([self.batch_size,1])
         init_decoder = tf.zeros([self.batch_size, self.h_size])
         mask = tf.cast(tf.not_equal(self.labels, EOU), tf.float32)
-        h, h_s = tf.scan(self.run_first, [self.labels, self.rolled_label], initializer=[init_encode, init_hier])
+        if self.bi==0:
+            h, h_s = tf.scan(self.run_first, [self.labels, self.rolled_label], initializer=[init_encode, init_hier])
+        else:
+            r_l = tf.reverse(self.labels,dims=[True, False, False])
+            rolled_r_l = tf.concat(0,[EOU * tf.ones([1, batch_size], dtype=tf.int64), r_l])
+            r_h = tf.scan(self.run_word, [r_l, rolled_r_l], initializer=init_encoder)
+            r_h = tf.reverse(r_h, dims=[True, False, False])
+            h, h_s = tf.scan(self.run_first, [self.labels, r_h, self.rolled_label], initializer=[init_encode, init_hier])
         r_h = tf.reverse(h, dims=[True, False, False])
         r_mask = tf.reverse(mask, [True, False])
         reversed_h = tf.scan(self.reverse_h, [r_h, r_mask], initializer=r_h[0])

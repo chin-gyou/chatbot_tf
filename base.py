@@ -4,7 +4,7 @@ import tensorflow as tf
 from dense import *
 
 # end token index
-EOU = 18576
+EOU = 2
 EOT = 2
 
 # force every function to execute only once
@@ -42,7 +42,7 @@ class base_enc_dec:
     embedding: vocab_size*embed_size
     """
     @init_final
-    def __init__(self, labels, length, h_size, vocab_size, embedding, batch_size, learning_rate, mode,beam_size=5):
+    def __init__(self, labels, length, h_size, vocab_size, embedding, batch_size, learning_rate, mode,beam_size=5, bi=0):
         self.__dict__.update(locals())
         self.labels = tf.concat(0,
                                 [EOU * tf.ones([1, batch_size], dtype=tf.int64), labels])  # pad EOU at the first place
@@ -62,12 +62,13 @@ class base_enc_dec:
     word-level rnn step
     takes the previous state and new input, output the new hidden state
     prev_h: batch_size*h_size
-    input: batch_size*embed_size
+    input: batch_size
     """
 
-    def word_level_rnn(self, prev_h, input_embedding):
+    def word_level_rnn(self, prev_h, input_w):
         with tf.variable_scope('encode'):
-            _, h_new = self.encodernet(input_embedding, prev_h)
+            embedding = self.embed_labels(input_w)
+            _, h_new = self.encodernet(embedding, prev_h)
             return h_new
 
     """
@@ -81,16 +82,28 @@ class base_enc_dec:
         with tf.variable_scope('decode'):
             _, h_new = self.decodernet(input_h, prev_h)
             return h_new
-
+    
+    """
+    if bi==1, input_labels[0] is word index and input_labels[1] is inversed state, else only word index
+    return the encoder hidden state
+    """
+    def generate_encode(self,input_labels):
+        if self.bi==0:
+            return self.word_level_rnn(prev_h[0], input_labels)
+        else:
+            h = self.word_level_rnn(prev_h[0], input_labels[0])
+            return tf.concat(1,[h,input_labels[1]])
+        
+            
     """
     prev_h[0]: word-level last state
     prev_h[1]: decoder last state
+    if bi==1, input_labels[0] is word index and input_labels[1] is inversed state, else only word index
     basic encoder-decoder model
     """
 
     def run(self, prev_h, input_labels):
-        embedding = self.embed_labels(input_labels)
-        h = self.word_level_rnn(prev_h[0], embedding)
+        h = self.generate_encode(input_labels)
         d = self.decode_level_rnn(prev_h[1], h)
         return [h, d]
 
@@ -108,9 +121,15 @@ class base_enc_dec:
     # scan step, return output hidden state of the output layer
     # h_d states after running, max_len*batch_size*h_size
     def scan_step(self):
-        init_encode = tf.zeros([self.batch_size, self.h_size])
+        init_encoder = tf.zeros([self.batch_size, self.h_size])
         init_decoder = tf.zeros([self.batch_size, self.h_size])
-        _, h_d = tf.scan(self.run, self.labels, initializer=[init_encode, init_decoder])
+        if self.bi==1:
+            r_l = tf.reverse(self.labels,dims=[True, False])
+            r_h = tf.scan(self.word_level_rnnn, r_l, initializer=init_encoder)
+            r_h = tf.reverse(r_h, dims=[True, False, False])
+            _, h_d = tf.scan(self.run, [self.labels, r_h], initializer=[init_encoder, init_decoder])
+        else:
+            _, h_d = tf.scan(self.run, self.labels, initializer=[init_encoder, init_decoder])
         return [_, h_d]
 
     # return output layer
