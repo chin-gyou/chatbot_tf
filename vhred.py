@@ -10,7 +10,8 @@ class vhred(hred):
         self.scale_cov = 0.1
         self.first_priff = Dense("Latent", z_size, c_size, nonlinearity=tf.tanh, name='first_priff')
         self.second_priff = Dense("Latent", z_size, z_size, nonlinearity=tf.tanh, name='second_priff')
-        self.first_postff = Dense("Latent", z_size, c_size + h_size, nonlinearity=tf.tanh, name='first_postff')
+        post_len = c_size+h_size if bi==0 else c_size + 2*h_size
+        self.first_postff = Dense("Latent", z_size, post_len, nonlinearity=tf.tanh, name='first_postff')
         self.second_postff = Dense("Latent", z_size, z_size, nonlinearity=tf.tanh, name='second_postff')
         self.prior_m = Dense("Latent", z_size, z_size, name='prior_mean')
         self.prior_c = Dense("Latent", z_size, z_size, name='prior_cov')
@@ -61,11 +62,9 @@ class vhred(hred):
 
     def run_first(self, prev_h, input_labels):
         mask = self.gen_mask(input_labels[0], EOU)
-        rolled_mask = self.gen_mask(input_labels[1], EOU)
-        embedding = self.embed_labels(input_labels[0])
-        h = self.generate_encode(input_labels)
+        h = self.generate_encode(prev_h[0],input_labels)
         h_s = self.hier_level_rnn(prev_h[1], h, mask)
-        return [h, h_s]
+        return [h[:,:self.h_size], h_s]
 
     # prev_h: kl divergence, decoder state, latent state
     # input_labels: h_s, r_h, labels
@@ -94,34 +93,32 @@ class vhred(hred):
         d = self.decode_level_rnn(pre_h_d, tf.concat(1, [z, h_s, embedding]), mask)
         return [kl, d, z]
 
-    # prev_h: reversed h[i]
-    # input_labels: reversed h[i], mask
-    def reverse_h(self, prev_h, input_labels):
-        h, mask = input_labels
-        mask = tf.reshape(mask, [self.batch_size, 1])
-        new_h = prev_h * mask + h * (1 - mask)
-        return new_h
-
     # scan step, return output hidden state of the output layer
     # h_d states after running, max_len*batch_size*h_size
     def scan_step(self):
-        init_encode = tf.zeros([self.batch_size, self.h_size]) if self.bi==0 else tf.zeros([self.batch_size, 2*self.h_size])
+        init_encoder = tf.zeros([self.batch_size, self.h_size])
         init_hier = tf.zeros([self.batch_size, self.c_size])
         init_latent = tf.zeros([self.batch_size, self.z_size])
         kl = tf.zeros([self.batch_size,1])
         init_decoder = tf.zeros([self.batch_size, self.h_size])
-        mask = tf.cast(tf.not_equal(self.labels, EOU), tf.float32)
+        l_mask = tf.cast(tf.not_equal(self.labels, EOU), tf.float32)
         if self.bi==0:
-            h, h_s = tf.scan(self.run_first, [self.labels, self.rolled_label], initializer=[init_encode, init_hier])
+            h, h_s = tf.scan(self.run_first, [self.labels, self.rolled_label], initializer=[init_encoder, init_hier])
         else:
-            r_l = tf.reverse(self.labels,dims=[True, False, False])
-            rolled_r_l = tf.concat(0,[EOU * tf.ones([1, batch_size], dtype=tf.int64), r_l])
+            r_l = tf.reverse(self.labels,dims=[True, False])
+            r_l = tf.concat(0,[EOU * tf.ones([1, self.batch_size], dtype=tf.int64), r_l])
+            rolled_r_l = tf.concat(0, [EOU * tf.ones([1, self.batch_size], dtype=tf.int64), r_l[:-1]])
             r_h = tf.scan(self.run_word, [r_l, rolled_r_l], initializer=init_encoder)
             r_h = tf.reverse(r_h, dims=[True, False, False])
-            h, h_s = tf.scan(self.run_first, [self.labels, r_h, self.rolled_label], initializer=[init_encode, init_hier])
+            mask = tf.cast(tf.not_equal(r_l, EOU), tf.float32)
+            mask = tf.reverse(mask,dims=[True, False])
+            r_h = tf.scan(self.forward_mask, [r_h, mask], initializer=r_h[0])
+            r_h = tf.concat(0, [tf.reshape(r_h[-1],[1,self.batch_size,self.h_size]),r_h[:-2]])
+            h, h_s = tf.scan(self.run_first, [self.labels, r_h, self.rolled_label], initializer=[init_encoder, init_hier])
+        h = tf.concat(2,[h,r_h])
         r_h = tf.reverse(h, dims=[True, False, False])
-        r_mask = tf.reverse(mask, [True, False])
-        reversed_h = tf.scan(self.reverse_h, [r_h, r_mask], initializer=r_h[0])
+        r_mask = tf.reverse(l_mask, [True, False])
+        reversed_h = tf.scan(self.forward_mask, [r_h, r_mask], initializer=r_h[0])
         r_h = tf.reverse(reversed_h, dims=[True, False, False])
         kl, h_d, _ = tf.scan(self.run_second, [h_s[:-1], r_h[1:], self.labels[:-1]],
                              initializer=[kl, init_decoder, init_latent])
@@ -184,6 +181,6 @@ class vhred(hred):
     def optimise(self):
         optim = tf.train.AdamOptimizer(self.learning_rate)
         global_step = tf.Variable(0, name='global_step', trainable=False)
-        train_op = optim.minimize(self.cost[0] + self.cost[1] * tf.to_float(tf.reduce_min([1, global_step / 75000])),
+        train_op = optim.minimize(self.cost[0] + self.cost[1] * tf.to_float(tf.reduce_min([1, global_step / 9000])),
                                   global_step=global_step)
-        return global_step, train_op, tf.to_float(tf.reduce_min([1, global_step / 75000]))
+        return global_step, train_op, tf.to_float(tf.reduce_min([1, global_step / 9000]))

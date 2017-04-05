@@ -86,7 +86,7 @@ class data_producer:
         # shuffled batch
         batched_seq, batched_len = tf.train.shuffle_batch(
             tensors=[sequences['seq'], length['len']],
-            batch_size=batch_size, capacity=50000, min_after_dequeue=10000, shapes=[[80],[]]
+            batch_size=batch_size, capacity=50000, min_after_dequeue=10000, shapes=[[40],[]]
         )
 
         return tf.transpose(batched_seq, perm=[1, 0]), batched_len

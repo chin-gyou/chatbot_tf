@@ -56,8 +56,8 @@ def build_graph(options, path):
     # build model and graph
     # model = vhred(labels, length, int(options.h_size), int(options.c_size), int(options.z_size),vocab_size, word_vecs,
     #             int(options.batch_size), float(options.lr), int(options.mode))
-    model = hred(labels, length, int(options.h_size), int(options.c_size), vocab_size, word_vecs,
-                 int(options.batch_size), float(options.lr), int(options.mode))
+    model = hred(labels, length, int(options.h_size), int(options.c_size), vocab_size, word_vecs.astype(np.float32),
+                 int(options.batch_size), float(options.lr), int(options.mode),bi=0)
     return model
 
 
@@ -88,7 +88,7 @@ def train(options, start=False):
         print('Start Training...')
     try:
         # N_EXAMPLES = 12800
-        N_EXAMPLES = 787230
+        N_EXAMPLES = 3383253
         steps_per_epoch = N_EXAMPLES // int(options.batch_size)
         while not coord.should_stop():
             batch_loss, training, summary = sess.run([model.cost, model.optimise, merged])
@@ -163,7 +163,7 @@ filedir: directory for evaluated tfrecords
 
 
 def evaluate(sess, model, batch_size):
-    step_evaluate = 35274 // batch_size
+    step_evaluate = 339870 // batch_size
     # step_evaluate = 1280/batch_size
     coord = tf.train.Coordinator()
     step = 0
