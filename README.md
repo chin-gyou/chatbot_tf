@@ -8,7 +8,7 @@ the conditional VHRED model for generative dialog modeling as described by Shen 
 1. Download the original Ubuntu Dialogue Corpus as released by Lowe et al. (2015) which can be found : http://cs.mcgill.ca/~jpineau/datasets/ubuntu-corpus-1.0/
 2. Create the dictionary from the corpus and Serialize the dicitonary and corpus.   
 3. Download Word2Vec trained by GoogleNes: https://drive.google.com/file/d/0B7XkCwpI5KDYNlNUTTlSS21pQmM.
-4. We use TFRecord for fast and stable training process: 1) python dataproducer.py (generate tfrecord from the serialized corpus text)
+4. Changing dataproducer.py to generate tfrecord from the serialized corpus text(We use TFRecord for fast and stable training process)
 
 
 ###
